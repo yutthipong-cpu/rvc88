@@ -45,7 +45,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', cut: null, size: null, extras: [], done: null, confirm: false, lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', cut: null, size: null, extras: [], done: null, confirm: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -60,7 +60,7 @@ class App extends Component {
     // Poll so counts and results stay current while other people vote.
     this._poll = setInterval(() => { if (!document.hidden) this.refresh(); }, POLL_MS);
     this._onVisible = () => { if (!document.hidden) this.refresh(); };
-    this._onKey = e => { if (e.key === 'Escape' && !this.state.saving) this.setState({ lightbox: null, askKey: false, confirm: false }); };
+    this._onKey = e => { if (e.key === 'Escape' && !this.state.saving && !this.state.clearing) this.setState({ lightbox: null, askKey: false, confirm: false, confirmClear: false }); };
     document.addEventListener('visibilitychange', this._onVisible);
     window.addEventListener('keydown', this._onKey);
   }
@@ -71,8 +71,9 @@ class App extends Component {
   }
   componentDidUpdate(_, prev) {
     // Lock page scroll behind the lightbox, the done sheet and the password popup.
-    const locked = !!(this.state.lightbox || this.state.done || this.state.askKey || this.state.confirm);
-    if (locked !== !!(prev.lightbox || prev.done || prev.askKey || prev.confirm)) document.body.style.overflow = locked ? 'hidden' : '';
+    const modal = st => !!(st.lightbox || st.done || st.askKey || st.confirm || st.confirmClear);
+    const locked = modal(this.state);
+    if (locked !== modal(prev)) document.body.style.overflow = locked ? 'hidden' : '';
     if (this.state.askKey && !prev.askKey) { const el = document.getElementById('key'); if (el) el.focus(); }
   }
 
@@ -135,7 +136,7 @@ class App extends Component {
       method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-key': this.state.adminKey },
       body: JSON.stringify({ resultsPublic: on })
     });
-    if (!r.ok) { window.alert('เปลี่ยนการตั้งค่าไม่สำเร็จ'); return; }
+    if (!r.ok) { this.setState({ adminMsg: 'เปลี่ยนการตั้งค่าไม่สำเร็จ ลองอีกครั้ง' }); return; }
     this.setState(st => ({ cfg: { ...st.cfg, resultsPublic: on } }));
   }
 
@@ -223,7 +224,7 @@ class App extends Component {
   }
   async exportXlsx() {
     let XLSX;
-    try { XLSX = await loadXlsx(); } catch (e) { window.alert('โหลดตัวสร้างไฟล์ Excel ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง หรือกดปุ่ม CSV แทน'); return; }
+    try { XLSX = await loadXlsx(); } catch (e) { this.setState({ adminMsg: 'โหลดตัวสร้างไฟล์ Excel ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง หรือกดปุ่ม CSV แทน' }); return; }
     const votes = this.shownVotes();
     const wb = XLSX.utils.book_new();
     const list = XLSX.utils.aoa_to_sheet(this.exportRows());
@@ -259,11 +260,17 @@ class App extends Component {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
+  // Asked in a page dialog: some phone browsers (LINE, Facebook) silently block window.confirm.
   async clearAll() {
-    if (!window.confirm('ล้างข้อมูลการโหวตทั้งหมด? ข้อมูลจะไม่สามารถกู้คืนได้')) return;
-    const r = await fetch('api/votes', { method: 'DELETE', headers: { 'x-admin-key': this.state.adminKey } });
-    if (!r.ok) { window.alert('ล้างข้อมูลไม่สำเร็จ'); return; }
-    this.refresh();
+    this.setState({ clearing: true });
+    try {
+      const r = await fetch('api/votes', { method: 'DELETE', headers: { 'x-admin-key': this.state.adminKey } });
+      if (!r.ok) throw new Error();
+      this.setState({ clearing: false, confirmClear: false, adminMsg: 'ล้างข้อมูลการโหวตทั้งหมดแล้ว' });
+      this.refresh();
+    } catch (e) {
+      this.setState({ clearing: false, confirmClear: false, adminMsg: 'ล้างข้อมูลไม่สำเร็จ ลองอีกครั้ง' });
+    }
   }
 
   render(_, s) {
@@ -287,6 +294,7 @@ class App extends Component {
   <footer class="foot"><div class="wrap ${onVote ? '' : 'wide'}">วิทยาลัยอาชีวศึกษาร้อยเอ็ด · สร้างคน สร้างอาชีพ สร้างอนาคต</div></footer>
 
   ${s.confirm && this.renderConfirm()}
+  ${s.confirmClear && this.renderClearConfirm()}
   ${s.done && this.renderDone()}
   ${s.lightbox && this.renderLightbox()}
   ${s.askKey && this.renderKeyPopup()}
@@ -566,6 +574,7 @@ class App extends Component {
 <main class="wrap wide results">
   <h1 class="page-title">ผลโหวตแบบเสื้อ</h1>
   <p class="count">${this.countText(votes.map(v => v.name), total)}</p>
+  ${s.adminMsg && html`<div class="notice info admin-msg" role="status"><span>${s.adminMsg}</span><button class="text-btn" onClick=${() => this.setState({ adminMsg: '' })}>ปิด</button></div>`}
 
   ${s.adminKey && html`
     <div class="panel switch-row">
@@ -640,7 +649,7 @@ class App extends Component {
           </li>`)}
       </ul>
       ${list.length === 0 && html`<p class="empty">${emptyText}</p>`}
-      ${s.adminKey ? canClear && html`<button class="danger" onClick=${() => this.clearAll()}>ล้างข้อมูลการโหวตทั้งหมด</button>`
+      ${s.adminKey ? canClear && html`<button class="danger" onClick=${() => this.setState({ confirmClear: true })}>ล้างข้อมูลการโหวตทั้งหมด</button>`
         : html`<button class="text-btn" style="align-self:flex-start" onClick=${() => this.askForKey()}>ผู้ดูแล: ใส่รหัสเพื่อดาวน์โหลด</button>`}
     </section>`}
 </main>`;
@@ -670,6 +679,22 @@ class App extends Component {
       <button class="btn btn-primary" disabled=${s.saving} onClick=${() => this.submit()}>
         ${s.saving ? 'กำลังบันทึก…' : editing ? 'ยืนยันการแก้ไข' : 'ยืนยันโหวต'}
       </button>
+    </div>
+  </div>
+</div>`;
+  }
+
+  renderClearConfirm() {
+    const s = this.state;
+    const close = () => { if (!s.clearing) this.setState({ confirmClear: false }); };
+    return html`
+<div class="backdrop" onClick=${e => { if (e.target === e.currentTarget) close(); }}>
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="clear-title" aria-describedby="clear-desc">
+    <h2 id="clear-title">ล้างข้อมูลการโหวตทั้งหมด?</h2>
+    <p id="clear-desc">โหวตทั้งหมด <b class="mono">${s.votes.length}</b> รายการจะถูกลบ และกู้คืนไม่ได้ ควรดาวน์โหลด Excel เก็บไว้ก่อน</p>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" disabled=${s.clearing} onClick=${close}>ยกเลิก</button>
+      <button class="btn btn-danger" disabled=${s.clearing} onClick=${() => this.clearAll()}>${s.clearing ? 'กำลังลบ…' : 'ลบทั้งหมด'}</button>
     </div>
   </div>
 </div>`;

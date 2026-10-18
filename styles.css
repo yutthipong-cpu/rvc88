@@ -157,6 +157,10 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .btn-primary{background:var(--navy);color:#fff}
 .btn-primary:hover:not(:disabled){background:#0B2457}
 .btn-primary:disabled{background:#DDE2EA;color:#7D879A}
+.btn-danger{background:var(--err);color:#fff}
+.btn-danger:hover:not(:disabled){background:#912018}
+.admin-msg{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:0}
+.admin-msg .text-btn{padding:0;flex:none}
 .btn-ghost{background:#fff;color:var(--navy);border-color:#C5CDDA}
 
 /* Footer */
