@@ -77,6 +77,8 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .list-group{padding:10px 14px 2px;font-size:13px;font-weight:600;color:var(--muted)}
 .list-item{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:46px;padding:8px 14px;font-size:16px;cursor:pointer}
 .list-item:hover,.list-item.active{background:#EEF2F8}
+.list-item.new-name span small{display:block;font-size:12px;color:var(--muted)}
+.list-item.new-name{color:var(--navy);font-weight:600}
 .voted-tag{flex:none;font-size:12px;font-weight:600;color:var(--ok)}
 .list-empty{padding:14px;font-size:15px;color:var(--muted)}
 .person{display:flex;align-items:center;gap:12px;padding:10px 10px 10px 14px;border:1.5px solid var(--navy);border-radius:10px;background:#F5F8FD}

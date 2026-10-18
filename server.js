@@ -30,6 +30,7 @@ const CONFIG = {
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
+const OTHER_DEPT = 'อื่นๆ';
 
 // Staff list is the source of truth for who may vote and their department.
 const staffByName = new Map(
@@ -132,8 +133,11 @@ async function api(req, res, url) {
     let b;
     try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
     if (!CONFIG.votingOpen) return send(res, 403, { error: 'ปิดรับการโหวตแล้ว' });
-    const name = String(b.name || '');
-    if (!staffByName.has(name)) return send(res, 400, { error: 'ไม่พบรายชื่อในระบบ' });
+    // Names not on the staff list are allowed and grouped under "อื่นๆ".
+    const name = String(b.name || '').replace(/\s+/g, ' ').trim();
+    const known = staffByName.has(name);
+    // A first name and a surname, letters only.
+    if (!known && !(/^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(name) && /\S\s+\S/.test(name))) return send(res, 400, { error: 'กรอกชื่อและนามสกุลให้ถูกต้อง' });
     if (!['1', '2'].includes(b.design)) return send(res, 400, { error: 'กรุณาเลือกแบบเสื้อ' });
     if (!['m', 'f'].includes(b.cut)) return send(res, 400, { error: 'กรุณาเลือกทรงเสื้อ' });
     if (!SIZES.includes(b.size)) return send(res, 400, { error: 'กรุณาเลือกไซซ์' });
@@ -154,7 +158,7 @@ async function api(req, res, url) {
       if (bad) return send(res, bad.status, { error: bad.error });
     }
     const vote = {
-      name, dept: staffByName.get(name), design: b.design, cut: b.cut, size: b.size,
+      name, dept: known ? staffByName.get(name) : OTHER_DEPT, ...(known ? {} : { other: true }), design: b.design, cut: b.cut, size: b.size,
       extras: extras.map(x => ({ cut: x.cut, size: x.size })),
       qty: 1 + extras.length,
       phone: digits(b.phone),

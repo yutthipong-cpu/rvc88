@@ -26,6 +26,9 @@ const dLabel = id => (DESIGNS.find(d => d.id === id) || {}).label || '—';
 const MAX_EXTRAS = 9;
 const digits = s => String(s || '').replace(/\D/g, '');
 const validPhone = s => /^\d{9,10}$/.test(digits(s));
+// Same rule as the server for names that are not on the staff list.
+const OTHER_DEPT = 'อื่นๆ';
+const validName = s => /^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(s) && /\S\s+\S/.test(s);
 // Every shirt in a vote: the first (free) then the paid extras. Shirts have a cut and size only;
 // the design is the vote. Older votes stored only a quantity, so their extras repeat the first shirt.
 const extrasOf = v => v.extras || Array.from({ length: Math.max(0, (v.qty || 1) - 1) }, () => ({ cut: v.cut, size: v.size }));
@@ -73,6 +76,16 @@ class App extends Component {
     if (this.state.askKey && !prev.askKey) { const el = document.getElementById('key'); if (el) el.focus(); }
   }
 
+  staffNames() {
+    if (this._staffRef !== this.state.staff) { this._staffRef = this.state.staff; this._staffSet = new Set(this.state.staff.map(p => p.name)); }
+    return this._staffSet;
+  }
+  // "โหวตแล้ว X จาก N คน +M": X counts people on the staff list, M counts names from outside it.
+  countText(names, total) {
+    const known = this.staffNames();
+    const staffVoted = names.filter(n => known.has(n)).length, others = names.length - staffVoted;
+    return html`โหวตแล้ว <b class="mono">${staffVoted}</b> จาก <span class="mono">${total}</span> คน${others ? html` <b class="mono">+${others}</b>` : ''}`;
+  }
   canSeeResults() { return !!(this.state.adminKey || this.state.cfg.resultsPublic); }
   refresh() {
     fetch('api/summary', { cache: 'no-store' }).then(r => r.json()).then(b => this.setState({ names: b.names })).catch(() => {});
@@ -290,13 +303,19 @@ class App extends Component {
       </div>`;
 
     const q = norm(s.query);
-    const matches = s.staff.filter(p => !q || norm(p.name).includes(q) || norm(p.dept).includes(q));
+    // People who voted under a name not on the staff list are listed under "อื่นๆ" so they can find themselves again.
+    const known = this.staffNames();
+    const people = s.staff.concat(s.names.filter(n => !known.has(n)).map(n => ({ name: n, dept: OTHER_DEPT })));
+    const matches = people.filter(p => !q || norm(p.name).includes(q) || norm(p.dept).includes(q));
+    // A name that is not on the list can be used as typed; it goes under "อื่นๆ".
+    const typed = s.query.replace(/\s+/g, ' ').trim();
+    if (validName(typed) && !people.some(p => norm(p.name) === norm(typed))) matches.push({ name: typed, dept: OTHER_DEPT, isNew: true });
     const hl = Math.min(s.hl, Math.max(0, matches.length - 1));
     let last = null;
     const onKey = e => {
       if (e.key === 'ArrowDown') { e.preventDefault(); this.setState({ open: true, hl: Math.min(hl + 1, matches.length - 1) }); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); this.setState({ hl: Math.max(hl - 1, 0) }); }
-      else if (e.key === 'Enter' && s.open && matches[hl]) { e.preventDefault(); this.pick(matches[hl]); }
+      else if (e.key === 'Enter' && s.open && matches[hl]) { e.preventDefault(); const p = matches[hl]; this.pick(p.isNew ? { name: p.name, dept: OTHER_DEPT } : p); }
       else if (e.key === 'Escape') this.setState({ open: false });
     };
     return html`
@@ -313,11 +332,13 @@ class App extends Component {
           <div class="list" id="name-list" role="listbox">
             ${matches.map((p, i) => {
               const head = p.dept !== last ? (last = p.dept, html`<div class="list-group">${p.dept}</div>`) : null;
-              return html`${head}<div role="option" aria-selected=${i === hl} class="list-item ${i === hl && q ? 'active' : ''}" onMouseDown=${e => { e.preventDefault(); this.pick(p); }}>
-                <span>${p.name}</span>${myVoted.has(p.name) && html`<span class="voted-tag">โหวตแล้ว</span>`}
+              const pickIt = () => this.pick(p.isNew ? { name: p.name, dept: OTHER_DEPT } : p);
+              return html`${head}<div role="option" aria-selected=${i === hl} class="list-item ${i === hl && q ? 'active' : ''} ${p.isNew ? 'new-name' : ''}" onMouseDown=${e => { e.preventDefault(); pickIt(); }}>
+                ${p.isNew ? html`<span>ใช้ชื่อ “${p.name}”<small>ไม่มีในรายชื่อ จะอยู่ในหมวดอื่นๆ</small></span>`
+                  : html`<span>${p.name}</span>${myVoted.has(p.name) && html`<span class="voted-tag">โหวตแล้ว</span>`}`}
               </div>`;
             })}
-            ${q && matches.length === 0 && html`<div class="list-empty">ไม่พบชื่อนี้ ลองพิมพ์แค่ชื่อต้นหรือนามสกุล</div>`}
+            ${q && matches.length === 0 && html`<div class="list-empty">ไม่พบชื่อนี้ ถ้าไม่มีในรายชื่อ พิมพ์ชื่อ–สกุลเต็มเพื่อเพิ่มในหมวดอื่นๆ</div>`}
           </div>`}
       </div>`;
   }
@@ -411,7 +432,7 @@ class App extends Component {
   <img class="intro-logo" src="assets/logo-88.png" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
   <h1>เลือกเสื้อที่ระลึก 88 ปี</h1>
   <p>เลือกแบบที่ชอบ แล้วระบุทรงและไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
-  <p class="count">โหวตแล้ว <b class="mono">${voted}</b> จาก <span class="mono">${total}</span> คน</p>
+  <p class="count">${this.countText(s.names, total)}</p>
 </section>
 
 <main class="wrap form">
@@ -529,6 +550,9 @@ class App extends Component {
     const votedNames = new Set(votes.map(v => v.name));
     const deptMap = new Map();
     s.staff.forEach(p => { if (!deptMap.has(p.dept)) deptMap.set(p.dept, { total: 0, voted: 0 }); const g = deptMap.get(p.dept); g.total++; if (votedNames.has(p.name)) g.voted++; });
+    // Names from outside the staff list have no fixed headcount: show how many voted.
+    const others = votes.filter(v => !this.staffNames().has(v.name)).length;
+    if (others) deptMap.set(OTHER_DEPT, { total: others, voted: others });
 
     const rq = norm(s.rq); const match = (n, d) => !rq || norm(n).includes(rq) || norm(d).includes(rq);
     const pending = s.staff.filter(p => !votedNames.has(p.name));
@@ -541,7 +565,7 @@ class App extends Component {
     return html`
 <main class="wrap wide results">
   <h1 class="page-title">ผลโหวตแบบเสื้อ</h1>
-  <p class="count">โหวตแล้ว <b class="mono">${voted}</b> จาก <span class="mono">${total}</span> คน (${(total ? voted / total * 100 : 0).toFixed(0)}%)</p>
+  <p class="count">${this.countText(votes.map(v => v.name), total)}</p>
 
   ${s.adminKey && html`
     <div class="panel switch-row">
