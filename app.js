@@ -40,7 +40,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', cut: null, size: null, extras: [], done: null, lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', cut: null, size: null, extras: [], done: null, confirm: false, lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -55,7 +55,7 @@ class App extends Component {
     // Poll so counts and results stay current while other people vote.
     this._poll = setInterval(() => { if (!document.hidden) this.refresh(); }, POLL_MS);
     this._onVisible = () => { if (!document.hidden) this.refresh(); };
-    this._onKey = e => { if (e.key === 'Escape') this.setState({ lightbox: null, askKey: false }); };
+    this._onKey = e => { if (e.key === 'Escape' && !this.state.saving) this.setState({ lightbox: null, askKey: false, confirm: false }); };
     document.addEventListener('visibilitychange', this._onVisible);
     window.addEventListener('keydown', this._onKey);
   }
@@ -66,8 +66,8 @@ class App extends Component {
   }
   componentDidUpdate(_, prev) {
     // Lock page scroll behind the lightbox, the done sheet and the password popup.
-    const locked = !!(this.state.lightbox || this.state.done || this.state.askKey);
-    if (locked !== !!(prev.lightbox || prev.done || prev.askKey)) document.body.style.overflow = locked ? 'hidden' : '';
+    const locked = !!(this.state.lightbox || this.state.done || this.state.askKey || this.state.confirm);
+    if (locked !== !!(prev.lightbox || prev.done || prev.askKey || prev.confirm)) document.body.style.overflow = locked ? 'hidden' : '';
     if (this.state.askKey && !prev.askKey) { const el = document.getElementById('key'); if (el) el.focus(); }
   }
 
@@ -160,7 +160,7 @@ class App extends Component {
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'บันทึกไม่สำเร็จ');
-      this.setState(st => ({ saving: false, done: body, prevVote: body, names: st.names.includes(body.name) ? st.names : st.names.concat(body.name) }));
+      this.setState(st => ({ saving: false, confirm: false, done: body, prevVote: body, names: st.names.includes(body.name) ? st.names : st.names.concat(body.name) }));
     } catch (e) {
       this.setState({ saving: false, error: e.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองกดอีกครั้ง' : e.message });
     }
@@ -251,6 +251,7 @@ class App extends Component {
 
   <footer class="foot"><div class="wrap ${onVote ? '' : 'wide'}">วิทยาลัยอาชีวศึกษาร้อยเอ็ด · สร้างคน สร้างอาชีพ สร้างอนาคต</div></footer>
 
+  ${s.confirm && this.renderConfirm()}
   ${s.done && this.renderDone()}
   ${s.lightbox && this.renderLightbox()}
   ${s.askKey && this.renderKeyPopup()}
@@ -450,8 +451,8 @@ class App extends Component {
       <b>${summary}</b>
       <small class=${hintClass} aria-live="polite">${hint}</small>
     </div>
-    <button class="btn btn-primary" disabled=${!canSubmit} onClick=${() => { if (canSubmit) this.submit(); }}>
-      ${s.saving ? 'กำลังบันทึก…' : prev && allowChange ? 'บันทึกการแก้ไข' : 'ยืนยันโหวต'}
+    <button class="btn btn-primary" disabled=${!canSubmit} onClick=${() => { if (canSubmit) this.setState({ confirm: true, error: '' }); }}>
+      ${prev && allowChange ? 'บันทึกการแก้ไข' : 'ยืนยันโหวต'}
     </button>
   </div>
 </div>`;
@@ -587,6 +588,35 @@ class App extends Component {
 </main>`;
   }
 
+  // Last check before saving: everything the vote will record, with a way back to edit.
+  renderConfirm() {
+    const s = this.state;
+    const shirts = [{ cut: s.cut, size: s.size }, ...s.extras];
+    const editing = !!(s.prevVote && s.person && s.prevVote.name === s.person.name);
+    const close = () => { if (!s.saving) this.setState({ confirm: false }); };
+    return html`
+<div class="backdrop" onClick=${e => { if (e.target === e.currentTarget) close(); }}>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <h2 id="confirm-title">ตรวจสอบก่อนยืนยัน</h2>
+    <dl>
+      <dt>ชื่อ</dt><dd>${s.person.name}</dd>
+      <dt>โหวต</dt><dd>${dLabel(s.design)}</dd>
+      ${shirts.map((x, j) => html`<dt>ตัวที่ ${j + 1}</dt><dd>${shirtText(x)} <span class="hint" style="font-weight:400">${j === 0 ? 'ฟรี' : 'ชำระเอง'}</span></dd>`)}
+      ${s.phone.trim() && html`<dt>เบอร์โทร</dt><dd>${s.phone.trim()}</dd>`}
+      ${s.note.trim() && html`<dt>หมายเหตุ</dt><dd>${s.note.trim()}</dd>`}
+    </dl>
+    ${s.extras.length > 0 && html`<p class="paid-note" style="margin:0">ฟรี 1 ตัว · ชำระเอง ${s.extras.length} ตัว</p>`}
+    ${s.error && html`<p class="lock-err" style="margin:0" role="alert">${s.error}</p>`}
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" disabled=${s.saving} onClick=${close}>แก้ไข</button>
+      <button class="btn btn-primary" disabled=${s.saving} onClick=${() => this.submit()}>
+        ${s.saving ? 'กำลังบันทึก…' : editing ? 'ยืนยันการแก้ไข' : 'ยืนยันโหวต'}
+      </button>
+    </div>
+  </div>
+</div>`;
+  }
+
   renderDone() {
     const done = this.state.done;
     return html`
@@ -601,7 +631,7 @@ class App extends Component {
     ${extrasOf(done).length > 0 && html`<p class="paid-note" style="margin:0">ฟรี 1 ตัว · ชำระเอง ${extrasOf(done).length} ตัว</p>`}
     <div class="sheet-actions">
       <button class="btn btn-ghost" onClick=${() => this.resetForm()}>โหวตให้คนถัดไป</button>
-      <button class="btn btn-primary" onClick=${() => this.goResults()}>ดูผลโหวต</button>
+      <button class="btn btn-primary" onClick=${() => this.resetForm()}>เสร็จสิ้น</button>
     </div>
   </div>
 </div>`;
