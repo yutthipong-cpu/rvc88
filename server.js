@@ -60,6 +60,24 @@ function saveSettings() {
 }
 
 const publicVote = ({ phone, note, ...v }) => v;
+
+// The phone number given with a vote is that person's code for changing it later.
+const digits = s => String(s || '').replace(/\D/g, '');
+const validPhone = s => /^\d{9,10}$/.test(digits(s));
+// Wrong guesses are limited per name and address so nobody can try numbers until one fits.
+const MAX_TRIES = 5, TRY_WINDOW = 15 * 60 * 1000;
+const tries = new Map();
+const clientIp = req => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+function checkPhone(req, vote, phone) {
+  if (!digits(vote.phone)) return null; // voted before phone numbers were required: the first number given becomes the code
+  const key = vote.name + '|' + clientIp(req);
+  const now = Date.now();
+  const t = tries.get(key);
+  if (t && now - t.first < TRY_WINDOW && t.count >= MAX_TRIES) return { status: 429, error: 'ใส่เบอร์ผิดหลายครั้ง รอ 15 นาทีแล้วลองใหม่' };
+  if (digits(phone) === digits(vote.phone)) { tries.delete(key); return null; }
+  tries.set(key, t && now - t.first < TRY_WINDOW ? { first: t.first, count: t.count + 1 } : { first: now, count: 1 });
+  return { status: 403, error: 'เบอร์โทรไม่ตรงกับที่ใช้ตอนโหวต' };
+}
 const isAdmin = req => !!ADMIN_KEY && req.headers['x-admin-key'] === ADMIN_KEY;
 
 function send(res, status, body) {
@@ -91,10 +109,15 @@ async function api(req, res, url) {
   // Who has voted (names only), for the turnout count and the "โหวตแล้ว" tags.
   if (url.pathname === '/api/summary' && req.method === 'GET') return send(res, 200, { names: votes.map(v => v.name) });
 
-  // One person's own vote, so they can see and edit it.
-  if (url.pathname === '/api/vote' && req.method === 'GET') {
-    const v = votes.find(x => x.name === url.searchParams.get('name'));
-    return send(res, 200, { vote: v ? publicVote(v) : null });
+  // One person's own vote, shown only when they give the phone number they voted with.
+  if (url.pathname === '/api/vote/check' && req.method === 'POST') {
+    let b;
+    try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
+    const v = votes.find(x => x.name === String(b.name || ''));
+    if (!v) return send(res, 404, { error: 'ยังไม่มีโหวตของชื่อนี้' });
+    const bad = checkPhone(req, v, b.phone);
+    if (bad) return send(res, bad.status, { error: bad.error });
+    return send(res, 200, { vote: { ...publicVote(v), note: v.note } });
   }
 
   // Results need the admin password unless the admin has opened them to everyone.
@@ -123,13 +146,18 @@ async function api(req, res, url) {
         return send(res, 400, { error: `เลือกทรงและไซซ์ของตัวที่ ${i + 2} ให้ครบ` });
       }
     }
+    if (!validPhone(b.phone)) return send(res, 400, { error: 'กรอกเบอร์โทร 9–10 หลัก' });
     const prev = votes.find(v => v.name === name);
     if (prev && !CONFIG.allowChangeVote) return send(res, 409, { error: 'ท่านโหวตแล้ว ไม่สามารถโหวตซ้ำได้' });
+    if (prev) {
+      const bad = checkPhone(req, prev, b.phone);
+      if (bad) return send(res, bad.status, { error: bad.error });
+    }
     const vote = {
       name, dept: staffByName.get(name), design: b.design, cut: b.cut, size: b.size,
       extras: extras.map(x => ({ cut: x.cut, size: x.size })),
       qty: 1 + extras.length,
-      phone: String(b.phone || '').replace(/[^0-9-]/g, '').slice(0, 12),
+      phone: digits(b.phone),
       note: String(b.note || '').trim().slice(0, 500),
       time: Date.now()
     };

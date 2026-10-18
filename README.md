@@ -1,6 +1,6 @@
 # ระบบโหวตเลือกแบบเสื้อที่ระลึก 88 ปี
 
-Voting page for the Roi Et Vocational College 88th-anniversary shirt. Staff pick their name, vote for a design, and give the cut and size of each shirt they order (the first is free, extras are paid). Votes from every device are saved on the server.
+Voting page for the Roi Et Vocational College 88th-anniversary shirt. Staff pick their name, give a phone number, vote for a design, and give the cut and size of each shirt they order (the first is free, extras are paid). The phone number is that person's code for editing the vote later; wrong guesses are limited to 5 per 15 minutes. Votes from every device are saved on the server.
 
 Live at https://rvc88.tuatorton.com
 

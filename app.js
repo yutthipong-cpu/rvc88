@@ -24,6 +24,8 @@ const fmtTime = t => new Date(t).toLocaleString('th-TH', { day: 'numeric', month
 const cutLabel = c => c === 'f' ? 'หญิง' : 'ชาย';
 const dLabel = id => (DESIGNS.find(d => d.id === id) || {}).label || '—';
 const MAX_EXTRAS = 9;
+const digits = s => String(s || '').replace(/\D/g, '');
+const validPhone = s => /^\d{9,10}$/.test(digits(s));
 // Every shirt in a vote: the first (free) then the paid extras. Shirts have a cut and size only;
 // the design is the vote. Older votes stored only a quantity, so their extras repeat the first shirt.
 const extrasOf = v => v.extras || Array.from({ length: Math.max(0, (v.qty || 1) - 1) }, () => ({ cut: v.cut, size: v.size }));
@@ -40,7 +42,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', cut: null, size: null, extras: [], done: null, confirm: false, lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', cut: null, size: null, extras: [], done: null, confirm: false, lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -142,12 +144,30 @@ class App extends Component {
   }
   shownVotes() { return this.state.cfg.sampleData ? this.sample() : this.state.votes; }
 
-  async pick(p) {
-    this.setState({ person: p, query: '', open: false, prevVote: null, error: '' });
+  pick(p) {
+    // Someone who already voted must give their phone number before the old vote is shown (see unlockVote).
+    // Clear choices that came from someone else's opened vote, or that would hide behind the phone check.
+    const clear = this.state.prevVote || this.state.names.includes(p.name)
+      ? { design: null, cut: null, size: null, extras: [], note: '', extra: false } : {};
+    this.setState({ person: p, query: '', open: false, prevVote: null, phone: '', unlockErr: '', error: '', ...clear });
+  }
+  // Opens an earlier vote for editing; the phone number given when voting is the code.
+  async unlockVote() {
+    const s = this.state;
+    if (s.unlocking || !validPhone(s.phone)) return;
+    this.setState({ unlocking: true, unlockErr: '' });
     try {
-      const { vote } = await (await fetch('api/vote?name=' + encodeURIComponent(p.name), { cache: 'no-store' })).json();
-      if (vote && this.state.person === p) this.setState({ prevVote: vote, design: vote.design, cut: vote.cut, size: vote.size, extras: extrasOf(vote) });
-    } catch (e) {}
+      const r = await fetch('api/vote/check', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: s.person.name, phone: s.phone })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'ตรวจสอบไม่สำเร็จ');
+      const v = body.vote;
+      this.setState({ unlocking: false, prevVote: v, design: v.design, cut: v.cut, size: v.size, extras: extrasOf(v), note: v.note || '', extra: !!v.note });
+    } catch (e) {
+      this.setState({ unlocking: false, unlockErr: e.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองอีกครั้ง' : e.message });
+    }
   }
   async submit() {
     const s = this.state;
@@ -156,7 +176,7 @@ class App extends Component {
     try {
       const r = await fetch('api/votes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: s.person.name, design: s.design, cut: s.cut, size: s.size, extras: s.extras, phone: s.phone.trim(), note: s.note.trim() })
+        body: JSON.stringify({ name: s.person.name, design: s.design, cut: s.cut, size: s.size, extras: s.extras, phone: digits(s.phone), note: s.note.trim() })
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'บันทึกไม่สำเร็จ');
@@ -166,7 +186,7 @@ class App extends Component {
     }
   }
   resetForm() {
-    this.setState({ person: null, prevVote: null, query: '', phone: '', note: '', extra: false, design: null, cut: null, size: null, extras: [], done: null, side: 'front' });
+    this.setState({ person: null, prevVote: null, unlockErr: '', query: '', phone: '', note: '', extra: false, design: null, cut: null, size: null, extras: [], done: null, side: 'front' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   setTab(tab) {
@@ -263,7 +283,8 @@ class App extends Component {
     if (s.person) return html`
       <div class="person">
         <div><b>${s.person.name}</b><small>${s.person.dept}</small></div>
-        <button class="btn btn-ghost" style="height:40px;padding:0 14px;font-size:15px" onClick=${() => this.setState({ person: null, query: '', open: true })}>เปลี่ยนชื่อ</button>
+        <button class="btn btn-ghost" style="height:40px;padding:0 14px;font-size:15px" onClick=${() => this.setState(st => ({ person: null, prevVote: null, phone: '', unlockErr: '', query: '', open: true,
+          ...(st.prevVote ? { design: null, cut: null, size: null, extras: [], note: '', extra: false } : {}) }))}>เปลี่ยนชื่อ</button>
       </div>`;
 
     const q = norm(s.query);
@@ -363,16 +384,19 @@ class App extends Component {
     const allowChange = s.cfg.allowChangeVote, isOpen = s.cfg.votingOpen;
     const myVoted = new Set(s.names);
     const prev = s.person && s.prevVote && s.prevVote.name === s.person.name ? s.prevVote : null;
+    // Picked a name that already voted, and has not yet unlocked it with their phone number.
+    const needsUnlock = !!(s.person && !prev && myVoted.has(s.person.name));
 
-    const locked = !isOpen || (prev && !allowChange);
+    const locked = !isOpen || ((prev || needsUnlock) && !allowChange) || needsUnlock;
     const missing = [];
     if (!s.person) missing.push('ชื่อ');
+    if (s.person && !needsUnlock && !validPhone(s.phone)) missing.push('เบอร์โทร');
     if (!s.design) missing.push('แบบเสื้อ');
     if (!s.cut) missing.push('ทรง');
     if (!s.size) missing.push('ไซซ์');
     s.extras.forEach((x, i) => { if (!x.cut || !x.size) missing.push(`ตัวที่ ${i + 2}`); });
     const canSubmit = !missing.length && !locked && !s.saving;
-    const hint = s.error || (locked ? (!isOpen ? 'ปิดรับโหวตแล้ว' : 'ท่านโหวตแล้ว แก้ไขไม่ได้')
+    const hint = s.error || (locked ? (!isOpen ? 'ปิดรับโหวตแล้ว' : !allowChange ? 'ท่านโหวตแล้ว แก้ไขไม่ได้' : 'ใส่เบอร์โทรที่ใช้ตอนโหวตเพื่อแก้ไข')
       : missing.length ? 'ยังขาด: ' + missing.join(', ')
       : prev ? 'จะบันทึกทับโหวตเดิม' : 'ครบแล้ว กดยืนยันได้');
     const hintClass = s.error || locked ? 'err' : missing.length ? '' : 'ok';
@@ -394,8 +418,23 @@ class App extends Component {
   <section class="block">
     <div class="block-head"><h2>ชื่อของท่าน <span class="req">*</span></h2></div>
     ${this.renderNamePicker(myVoted)}
-    ${prev && html`<div class="notice info">ท่านโหวตไว้แล้วเมื่อ ${fmtTime(prev.time)}: ${dLabel(prev.design)} ทรง${cutLabel(prev.cut)} ${prev.size}${extrasOf(prev).length ? ` และสั่งเพิ่ม ${extrasOf(prev).length} ตัว` : ''}
-      ${allowChange ? ' แก้ด้านล่างแล้วกดบันทึกได้' : ' ระบบไม่เปิดให้แก้ไข'}</div>`}
+    ${needsUnlock ? (allowChange ? html`
+      <div class="notice info">
+        ท่านโหวตแล้ว ใส่เบอร์โทรที่ใช้ตอนโหวตเพื่อดูและแก้ไขโหวตเดิม
+        <form class="unlock" onSubmit=${e => { e.preventDefault(); this.unlockVote(); }}>
+          <label class="sr" for="unlock-phone">เบอร์โทรที่ใช้ตอนโหวต</label>
+          <input id="unlock-phone" class="field" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0812345678" value=${s.phone}
+            onInput=${e => { const v = digits(e.target.value).slice(0, 10); e.target.value = v; this.setState({ phone: v, unlockErr: '' }); }} />
+          <button class="btn btn-primary" type="submit" disabled=${!validPhone(s.phone) || s.unlocking}>${s.unlocking ? 'กำลังตรวจ…' : 'แก้ไขโหวต'}</button>
+        </form>
+        ${s.unlockErr && html`<p class="lock-err" role="alert">${s.unlockErr}</p>`}
+      </div>` : html`<div class="notice info">ท่านโหวตแล้ว ระบบไม่เปิดให้แก้ไข</div>`)
+    : s.person && html`
+      <label class="field-label" for="phone">เบอร์โทรศัพท์ <span class="req">*</span></label>
+      <input id="phone" class="field" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0812345678" value=${s.phone}
+        readonly=${!!prev} onInput=${e => { const v = digits(e.target.value).slice(0, 10); e.target.value = v; this.setState({ phone: v }); }} />
+      <p class="hint" style="margin-top:6px">${prev ? 'ใช้เบอร์เดิมเป็นรหัสแก้ไข' : 'จำเบอร์นี้ไว้ ใช้เป็นรหัสเมื่อต้องการแก้ไขโหวตภายหลัง'}</p>`}
+    ${prev && html`<div class="notice info">ท่านโหวตไว้แล้วเมื่อ ${fmtTime(prev.time)} แก้ด้านล่างแล้วกดบันทึกได้</div>`}
   </section>
 
   <section class="block">
@@ -434,14 +473,11 @@ class App extends Component {
   ${this.renderExtras()}
 
   <section class="block">
-    <div class="block-head"><h2>ติดต่อ <span class="hint" style="font-weight:400">(ไม่บังคับ)</span></h2></div>
-    ${s.extra || s.phone || s.note ? html`
-      <label class="field-label" for="phone">เบอร์โทร <span>(ไม่บังคับ)</span></label>
-      <input id="phone" class="field" type="tel" inputmode="tel" maxlength="12" value=${s.phone} placeholder="08x-xxx-xxxx"
-        onInput=${e => { const v = e.target.value.replace(/[^0-9-]/g, ''); e.target.value = v; this.setState({ phone: v }); }} />
-      <label class="field-label" for="note">หมายเหตุถึงผู้จัดทำ <span>(ไม่บังคับ)</span></label>
+    <div class="block-head"><h2>หมายเหตุถึงผู้จัดทำ <span class="hint" style="font-weight:400">(ไม่บังคับ)</span></h2></div>
+    ${s.extra || s.note ? html`
+      <label class="sr" for="note">หมายเหตุถึงผู้จัดทำ</label>
       <textarea id="note" class="field" rows="2" value=${s.note} onInput=${e => this.setState({ note: e.target.value })}></textarea>`
-    : html`<button class="text-btn" onClick=${() => this.setState({ extra: true })}>+ เพิ่มเบอร์โทรหรือหมายเหตุ</button>`}
+    : html`<button class="text-btn" onClick=${() => this.setState({ extra: true })}>+ เพิ่มหมายเหตุ</button>`}
   </section>
 </main>
 
@@ -629,6 +665,7 @@ class App extends Component {
       ${shirtsOf(done).map((x, j) => html`<dt>ตัวที่ ${j + 1}</dt><dd>${shirtText(x)} <span class="hint" style="font-weight:400">${j === 0 ? 'ฟรี' : 'ชำระเอง'}</span></dd>`)}
     </dl>
     ${extrasOf(done).length > 0 && html`<p class="paid-note" style="margin:0">ฟรี 1 ตัว · ชำระเอง ${extrasOf(done).length} ตัว</p>`}
+    <p class="hint">ต้องการแก้ไขภายหลัง เลือกชื่อของท่านแล้วใส่เบอร์ <b class="mono">${this.state.phone}</b></p>
     <div class="sheet-actions">
       <button class="btn btn-ghost" onClick=${() => this.resetForm()}>โหวตให้คนถัดไป</button>
       <button class="btn btn-primary" onClick=${() => this.resetForm()}>เสร็จสิ้น</button>
