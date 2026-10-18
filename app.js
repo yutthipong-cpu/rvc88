@@ -149,7 +149,9 @@ class App extends Component {
     // Clear choices that came from someone else's opened vote, or that would hide behind the phone check.
     const clear = this.state.prevVote || this.state.names.includes(p.name)
       ? { design: null, cut: null, size: null, extras: [], note: '', extra: false } : {};
-    this.setState({ person: p, query: '', open: false, prevVote: null, phone: '', unlockErr: '', error: '', ...clear });
+    // Keep a phone number typed before the name, unless it belonged to someone else's opened vote.
+    const phone = this.state.prevVote ? '' : this.state.phone;
+    this.setState({ person: p, query: '', open: false, prevVote: null, phone, unlockErr: '', error: '', ...clear });
   }
   // Opens an earlier vote for editing; the phone number given when voting is the code.
   async unlockVote() {
@@ -283,8 +285,8 @@ class App extends Component {
     if (s.person) return html`
       <div class="person">
         <div><b>${s.person.name}</b><small>${s.person.dept}</small></div>
-        <button class="btn btn-ghost" style="height:40px;padding:0 14px;font-size:15px" onClick=${() => this.setState(st => ({ person: null, prevVote: null, phone: '', unlockErr: '', query: '', open: true,
-          ...(st.prevVote ? { design: null, cut: null, size: null, extras: [], note: '', extra: false } : {}) }))}>เปลี่ยนชื่อ</button>
+        <button class="btn btn-ghost" style="height:40px;padding:0 14px;font-size:15px" onClick=${() => this.setState(st => ({ person: null, prevVote: null, unlockErr: '', query: '', open: true,
+          ...(st.prevVote ? { phone: '', design: null, cut: null, size: null, extras: [], note: '', extra: false } : {}) }))}>เปลี่ยนชื่อ</button>
       </div>`;
 
     const q = norm(s.query);
@@ -390,7 +392,7 @@ class App extends Component {
     const locked = !isOpen || ((prev || needsUnlock) && !allowChange) || needsUnlock;
     const missing = [];
     if (!s.person) missing.push('ชื่อ');
-    if (s.person && !needsUnlock && !validPhone(s.phone)) missing.push('เบอร์โทร');
+    if (!needsUnlock && !validPhone(s.phone)) missing.push('เบอร์โทร');
     if (!s.design) missing.push('แบบเสื้อ');
     if (!s.cut) missing.push('ทรง');
     if (!s.size) missing.push('ไซซ์');
@@ -416,24 +418,20 @@ class App extends Component {
   ${!isOpen && html`<div class="notice closed">ปิดรับโหวตแล้ว ขอบคุณทุกท่านที่ร่วมเลือก</div>`}
 
   <section class="block">
-    <div class="block-head"><h2>ชื่อของท่าน <span class="req">*</span></h2></div>
+    <div class="block-head"><h2>ชื่อและเบอร์โทร</h2></div>
+    <span class="field-label" style="margin-top:0">ชื่อ – สกุล <span class="req">*</span></span>
     ${this.renderNamePicker(myVoted)}
-    ${needsUnlock ? (allowChange ? html`
-      <div class="notice info">
-        ท่านโหวตแล้ว ใส่เบอร์โทรที่ใช้ตอนโหวตเพื่อดูและแก้ไขโหวตเดิม
-        <form class="unlock" onSubmit=${e => { e.preventDefault(); this.unlockVote(); }}>
-          <label class="sr" for="unlock-phone">เบอร์โทรที่ใช้ตอนโหวต</label>
-          <input id="unlock-phone" class="field" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0812345678" value=${s.phone}
-            onInput=${e => { const v = digits(e.target.value).slice(0, 10); e.target.value = v; this.setState({ phone: v, unlockErr: '' }); }} />
-          <button class="btn btn-primary" type="submit" disabled=${!validPhone(s.phone) || s.unlocking}>${s.unlocking ? 'กำลังตรวจ…' : 'แก้ไขโหวต'}</button>
-        </form>
-        ${s.unlockErr && html`<p class="lock-err" role="alert">${s.unlockErr}</p>`}
-      </div>` : html`<div class="notice info">ท่านโหวตแล้ว ระบบไม่เปิดให้แก้ไข</div>`)
-    : s.person && html`
-      <label class="field-label" for="phone">เบอร์โทรศัพท์ <span class="req">*</span></label>
-      <input id="phone" class="field" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0812345678" value=${s.phone}
-        readonly=${!!prev} onInput=${e => { const v = digits(e.target.value).slice(0, 10); e.target.value = v; this.setState({ phone: v }); }} />
-      <p class="hint" style="margin-top:6px">${prev ? 'ใช้เบอร์เดิมเป็นรหัสแก้ไข' : 'จำเบอร์นี้ไว้ ใช้เป็นรหัสเมื่อต้องการแก้ไขโหวตภายหลัง'}</p>`}
+    ${needsUnlock && !allowChange ? html`<div class="notice info">ท่านโหวตแล้ว ระบบไม่เปิดให้แก้ไข</div>` : html`
+      <label class="field-label" for="phone">เบอร์โทรศัพท์ <span class="req">*</span> <span>ใช้เป็นรหัสผ่านแก้ไขข้อมูล</span></label>
+      ${needsUnlock && html`<p class="notice info" style="margin:0 0 8px">ชื่อนี้โหวตแล้ว ใส่เบอร์ที่ใช้ตอนโหวตเพื่อดูและแก้ไข</p>`}
+      <form class=${needsUnlock ? 'unlock' : ''} style=${needsUnlock ? 'margin-top:0' : ''} onSubmit=${e => { e.preventDefault(); if (needsUnlock) this.unlockVote(); }}>
+        <input id="phone" class="field" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0812345678" value=${s.phone}
+          readonly=${!!prev} aria-describedby="phone-hint"
+          onInput=${e => { const v = digits(e.target.value).slice(0, 10); e.target.value = v; this.setState({ phone: v, unlockErr: '' }); }} />
+        ${needsUnlock && html`<button class="btn btn-primary" type="submit" disabled=${!validPhone(s.phone) || s.unlocking}>${s.unlocking ? 'กำลังตรวจ…' : 'แก้ไขโหวต'}</button>`}
+      </form>
+      ${s.unlockErr && html`<p class="lock-err" style="margin-top:6px" role="alert">${s.unlockErr}</p>`}
+      <p class="hint" id="phone-hint" style="margin-top:6px">${prev ? 'ใช้เบอร์เดิมเป็นรหัสผ่าน แก้ไม่ได้' : needsUnlock ? '' : 'ตัวเลข 9–10 หลัก จำไว้ใช้แก้ไขโหวตภายหลัง'}</p>`}
     ${prev && html`<div class="notice info">ท่านโหวตไว้แล้วเมื่อ ${fmtTime(prev.time)} แก้ด้านล่างแล้วกดบันทึกได้</div>`}
   </section>
 

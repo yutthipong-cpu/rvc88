@@ -66,6 +66,7 @@ h1,h2,h3,p{margin:0}
 textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;line-height:1.5}
 .field-label{display:block;font-size:15px;font-weight:600;margin:12px 0 6px}
 .field-label span{font-weight:400;color:var(--muted)}
+.field-label .req{color:var(--err)}
 
 /* Name search */
 .search{position:relative}
