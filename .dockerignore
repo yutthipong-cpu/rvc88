@@ -1,0 +1,6 @@
+.git
+.claude
+.env
+node_modules
+data/votes.json*
+data/settings.json*

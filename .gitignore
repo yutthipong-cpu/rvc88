@@ -1,0 +1,11 @@
+# Vote data and settings written by the server
+data/votes.json
+data/votes.json.tmp
+data/settings.json
+data/settings.json.tmp
+# Staff names stay off the public repo; copy data/staff.json to the server directly
+data/staff.json
+# Secrets (ADMIN_KEY) and local tooling
+.env
+.claude/
+node_modules/

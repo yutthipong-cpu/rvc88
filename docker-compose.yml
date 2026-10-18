@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      ADMIN_KEY: ${ADMIN_KEY}
+    volumes:
+      # Votes and the results switch live here, so they survive rebuilds.
+      - rvc88_store:/app/store
+    expose:
+      - "3000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rvc88.rule=Host(`rvc88.tuatorton.com`)
+      - traefik.http.routers.rvc88.entrypoints=websecure
+      - traefik.http.routers.rvc88.tls.certresolver=letsencrypt
+      - traefik.http.services.rvc88.loadbalancer.server.port=3000
+
+volumes:
+  rvc88_store:

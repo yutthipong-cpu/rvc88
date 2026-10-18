@@ -1,0 +1,12 @@
+{
+  "name": "rvc88-shirt-vote",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ระบบโหวตเลือกแบบเสื้อที่ระลึก 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
