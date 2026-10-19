@@ -42,11 +42,26 @@ h1,h2,h3,p{margin:0}
 .results-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.7)}
 
 /* Intro */
-.intro{background:linear-gradient(180deg,#E3EDF7 0%,#EEF3F9 70%,var(--paper) 100%);text-align:center;padding:18px 0 16px}
-.intro-logo{display:block;width:min(320px,86%);height:auto;margin:0 auto 10px}
-.intro h1{font:600 clamp(26px,7vw,34px)/1.25 var(--display);color:var(--navy)}
-.intro p{font-size:15px;color:var(--muted);line-height:1.55;margin-top:6px}
-.intro .count{display:inline-block;margin-top:12px;padding:4px 14px;border-radius:99px;background:rgba(255,255,255,.8);font-size:15px;color:var(--ink)}
+/* Opening banner: fills the first screen; the form follows below. */
+.hero{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;background:linear-gradient(180deg,#E3EDF7 0%,#EEF3F9 65%,var(--paper) 100%);text-align:center}
+.hero-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px 0;text-align:left;font-size:12px;line-height:1.4;color:var(--muted)}
+.hero-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 16px 72px}
+.hero-logo{display:block;width:min(380px,90%);height:auto;margin:0 auto 14px}
+.hero h1{font:600 clamp(28px,8vw,40px)/1.2 var(--display);color:var(--navy)}
+.hero p{font-size:15px;color:var(--muted);line-height:1.55;margin-top:6px}
+.hero .count{display:inline-block;margin-top:12px;padding:4px 14px;border-radius:99px;background:rgba(255,255,255,.8);font-size:15px;color:var(--ink)}
+.btn.hero-cta{margin-top:20px;height:54px;min-width:220px;border-radius:99px;font-size:18px}
+.hero-down{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--navy);animation:nudge 1.8s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,6px)}}
+.results-btn.on-light{border-color:rgba(15,45,107,.35);color:var(--navy)}
+.results-btn.on-light:hover{background:rgba(15,45,107,.08)}
+/* On the vote page the header floats in once the banner is passed. */
+.top.floating{position:fixed;left:0;right:0;transform:translateY(-100%);transition:transform .25s ease}
+.top.floating.shown{transform:none}
+.bar{transition:transform .25s ease}
+.bar.tucked{transform:translateY(110%)}
+.form{padding-top:16px}
+.block{scroll-margin-top:96px}
 .count b{font-size:17px}
 
 /* Form blocks */

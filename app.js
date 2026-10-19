@@ -60,7 +60,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, pastHero: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -75,6 +75,17 @@ class App extends Component {
     // Poll so counts and results stay current while other people vote.
     this._poll = setInterval(() => { if (!document.hidden) this.refresh(); }, POLL_MS);
     this._onVisible = () => { if (!document.hidden) this.refresh(); };
+    // Header and bottom bar stay out of the way until the voter has scrolled past the opening banner.
+    this._onScroll = () => {
+      if (this._scrollRaf) return;
+      this._scrollRaf = requestAnimationFrame(() => {
+        this._scrollRaf = null;
+        const hero = document.getElementById('hero');
+        const past = !hero || window.scrollY > hero.offsetHeight - 140;
+        if (past !== this.state.pastHero) this.setState({ pastHero: past });
+      });
+    };
+    window.addEventListener('scroll', this._onScroll, { passive: true });
     this._onKey = e => { if (e.key === 'Escape' && !this.state.saving && !this.state.clearing) this.setState({ lightbox: null, askKey: false, confirm: false, confirmClear: false }); };
     document.addEventListener('visibilitychange', this._onVisible);
     window.addEventListener('keydown', this._onKey);
@@ -83,6 +94,11 @@ class App extends Component {
     clearInterval(this._poll);
     document.removeEventListener('visibilitychange', this._onVisible);
     window.removeEventListener('keydown', this._onKey);
+    window.removeEventListener('scroll', this._onScroll);
+  }
+  scrollToForm() {
+    const el = document.getElementById('step-name');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   componentDidUpdate(_, prev) {
     // Lock page scroll behind the lightbox, the done sheet and the password popup.
@@ -302,7 +318,7 @@ class App extends Component {
 
     return html`
 <div class="app">
-  <header class="top">
+  <header class="top ${onVote ? 'floating' : ''} ${!onVote || s.pastHero ? 'shown' : ''}" aria-hidden=${onVote && !s.pastHero}>
     <div class="wrap ${onVote ? '' : 'wide'} top-in">
       <div class="brand">
         <img src="assets/seal.webp" alt="ตราวิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
@@ -475,13 +491,21 @@ class App extends Component {
     const chartFor = s.design || '1';
 
     return html`
-<section class="intro">
-  <div class="wrap">
-    <img class="intro-logo" src="assets/logo-88.webp" width="640" height="424" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
+<section class="hero" id="hero">
+  <div class="hero-top">
+    <span>วันสถาปนาครบรอบ 88 ปี · สถานศึกษารางวัลพระราชทาน ปีการศึกษา 2568</span>
+    <button class="results-btn on-light" aria-label="ดูผลโหวต" title="ดูผลโหวต" onClick=${() => this.goResults()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h16M7 16v-4M12 16V7M17 16v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="hero-body">
+    <img class="hero-logo" src="assets/logo-88.webp" width="640" height="424" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
     <h1>โหวตเลือกเสื้อที่ระลึก</h1>
     <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
     <p class="count">${this.countText(s.names, total)}</p>
+    <button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>
   </div>
+  <button class="hero-down" aria-label="เลื่อนลงไปกรอกข้อมูล" onClick=${() => this.scrollToForm()}>
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
 </section>
 
 <main class="wrap form">
@@ -557,7 +581,7 @@ class App extends Component {
   </section>
 </main>
 
-<div class="bar">
+<div class="bar ${s.pastHero ? '' : 'tucked'}">
   <div class="wrap bar-in">
     <div class="bar-text">
       <b>${summary}</b>
