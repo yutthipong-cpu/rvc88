@@ -421,7 +421,7 @@ class App extends Component {
 
     return html`
 <section class="wrap intro">
-  <img class="intro-logo" src="assets/logo-88.png" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
+  <img class="intro-logo" src="assets/logo-88.webp" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
   <h1>เลือกเสื้อที่ระลึก 88 ปี</h1>
   <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
   <p class="count">${this.countText(s.names, total)}</p>

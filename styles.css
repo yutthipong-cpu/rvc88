@@ -41,7 +41,7 @@ h1,h2,h3,p{margin:0}
 
 /* Intro */
 .intro{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;padding-top:20px;padding-bottom:20px}
-.intro-logo{grid-row:span 2;width:104px;mix-blend-mode:multiply}
+.intro-logo{grid-row:span 2;width:128px;mix-blend-mode:multiply}
 .intro h1{font:400 clamp(26px,7vw,36px)/1.25 var(--display);color:var(--navy)}
 .intro p{font-size:15px;color:var(--muted);line-height:1.55}
 .intro .count{grid-column:1/-1;margin-top:10px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;color:var(--ink)}
