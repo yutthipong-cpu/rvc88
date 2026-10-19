@@ -460,7 +460,7 @@ class App extends Component {
       ${DESIGNS.map(d => {
         const sel = s.design === d.id;
         return html`
-        <div class="shirt" key=${d.id}>
+        <div class="shirt ${sel ? 'on' : ''}" key=${d.id}>
           <button class="shirt-pick" aria-pressed=${sel} onClick=${() => this.setState({ design: d.id })}>
             <img src=${s.side === 'front' ? d.front : d.back} alt=${`${d.label} ${s.side === 'front' ? 'ด้านหน้า' : 'ด้านหลัง'}`} />
             ${sel && html`<span class="tick">เลือกแล้ว</span>`}

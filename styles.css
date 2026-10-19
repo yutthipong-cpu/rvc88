@@ -98,15 +98,16 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 
 /* Shirt choice */
 .shirts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.shirt{display:flex;flex-direction:column;gap:2px}
-.shirt-pick{flex:1;position:relative;display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:0 0 10px;border:2px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.shirt{display:flex;flex-direction:column;border:2px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.shirt.on{border-color:var(--navy);box-shadow:0 0 0 2px var(--navy)}
+.shirt button:focus-visible{outline-offset:-3px}
+.shirt-pick{flex:1;position:relative;display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:0 0 8px;border:0;border-radius:0;background:#fff}
 .shirt-pick img{width:100%;aspect-ratio:1/1;object-fit:contain;padding:6px;background:#F0F3F8;mix-blend-mode:multiply}
 .shirt-name{padding:8px 10px 0;font-size:16px;font-weight:700}
 .shirt-tone{padding:0 10px;font-size:13px;line-height:1.4;color:var(--muted)}
-.shirt-pick[aria-pressed="true"]{border-color:var(--navy);box-shadow:0 0 0 2px var(--navy)}
 .tick{position:absolute;top:8px;left:8px;display:flex;align-items:center;gap:6px;padding:3px 10px 3px 6px;border-radius:99px;background:var(--navy);color:#fff;font-size:13px;font-weight:600}
 .tick::before{content:'';width:10px;height:5px;margin:-3px 0 0 2px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg)}
-.shirt .text-btn{align-self:flex-start;font-size:14px}
+.shirt .text-btn{align-self:stretch;text-align:left;margin:0;padding:8px 10px;border-top:1px solid var(--line);font-size:14px}
 
 /* Size tape */
 .tape{margin-top:16px;padding:0 4px;user-select:none}
