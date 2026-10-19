@@ -707,13 +707,24 @@ class App extends Component {
     const lb = this.state.lightbox;
     const d = DESIGNS.find(x => x.id === lb.id), other = DESIGNS.find(x => x.id !== lb.id);
     const setKind = kind => this.setState(st => ({ lightbox: { ...st.lightbox, kind } }));
+    // The detail boards are large; show progress until the picture has arrived, and say so if it fails.
+    const src = lb.kind === 'chart' ? d.chart : d.board;
+    const status = this.state.lbDone === src ? 'done' : this.state.lbFailed === src ? 'failed' : 'loading';
+    const loaded = () => this.setState({ lbDone: src, lbFailed: null });
+    const retry = () => { this._lbRetry = (this._lbRetry || 0) + 1; this.setState({ lbFailed: null }); };
     return html`
 <div class="lb" role="dialog" aria-modal="true" aria-label=${d.label}>
   <div class="lb-top">
     <b>${d.label}</b>
     <button class="lb-close" onClick=${() => this.setState({ lightbox: null })}>ปิด</button>
   </div>
-  <div class="lb-img"><img src=${lb.kind === 'chart' ? d.chart : d.board} alt=${`${d.label} ${lb.kind === 'chart' ? 'ตารางไซซ์' : 'ภาพรายละเอียด'}`} /></div>
+  <div class="lb-img" aria-busy=${status === 'loading'}>
+    <img key=${src + (this._lbRetry || '')} class=${status === 'done' ? '' : 'hidden'} src=${src} alt=${`${d.label} ${lb.kind === 'chart' ? 'ตารางไซซ์' : 'ภาพรายละเอียด'}`}
+      ref=${el => { if (el && el.complete && el.naturalWidth && status !== 'done') loaded(); }}
+      onLoad=${loaded} onError=${() => this.setState({ lbFailed: src })} />
+    ${status === 'loading' && html`<div class="lb-status" role="status"><span class="spinner"></span>กำลังโหลดภาพ…</div>`}
+    ${status === 'failed' && html`<div class="lb-status" role="alert">โหลดภาพไม่สำเร็จ<button class="lb-other" onClick=${retry}>ลองอีกครั้ง</button></div>`}
+  </div>
   <div class="lb-bottom">
     <div class="seg">
       <button aria-pressed=${lb.kind === 'board'} onClick=${() => setKind('board')}>ภาพรายละเอียด</button>

@@ -186,7 +186,12 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .lb-top b{font-size:17px}
 .lb-close{height:40px;padding:0 16px;border:0;border-radius:8px;background:#fff;color:var(--navy);font-weight:700}
 .lb-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 8px;overflow:auto}
-.lb-img img{max-width:min(1400px,100%);max-height:100%;object-fit:contain;border-radius:6px;background:#fff}
+.lb-img{position:relative}
+.lb-img img{max-width:min(1400px,100%);max-height:100%;object-fit:contain;border-radius:6px;background:#fff;transition:opacity .2s}
+.lb-img img.hidden{opacity:0;position:absolute}
+.lb-status{display:flex;flex-direction:column;align-items:center;gap:12px;font-size:15px;color:rgba(255,255,255,.85)}
+.spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .lb-bottom{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
 .lb .seg{background:rgba(255,255,255,.12)}
 .lb .seg button{color:rgba(255,255,255,.8)}
