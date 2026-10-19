@@ -38,6 +38,9 @@ h1,h2,h3,p{margin:0}
 .brand small{display:block;font-size:12px;line-height:1.35;opacity:.8}
 .top-link{flex:none;height:38px;padding:0 14px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-size:15px;font-weight:600}
 .top-link:hover{background:rgba(255,255,255,.1)}
+.results-btn{display:flex;align-items:center;gap:6px;height:42px;padding:0 12px 0 4px;border:0;border-radius:10px;background:#fff;color:var(--navy);box-shadow:0 0 0 2px #D9B25F}
+.results-btn img{width:34px;height:34px;border-radius:7px}
+.results-btn:hover{background:#FFF8E6}
 
 /* Intro */
 .intro{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;padding-top:20px;padding-bottom:20px}
@@ -186,9 +189,11 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 
 /* Lightbox */
 .lb{position:fixed;inset:0;z-index:100;background:#0B1226;color:#fff;display:flex;flex-direction:column}
-.lb-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 10px 16px}
-.lb-top b{font-size:17px}
-.lb-close{height:40px;padding:0 16px;border:0;border-radius:8px;background:#fff;color:var(--navy);font-weight:700}
+/* Title centred; the close button sits on the right without pushing it off centre. */
+.lb-top{position:relative;display:flex;align-items:center;justify-content:center;min-height:60px;padding:10px 60px}
+.lb-top b{font-size:18px}
+.lb-close{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff}
+.lb-close:hover{background:rgba(255,255,255,.25)}
 .lb-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 8px;overflow:auto}
 .lb-img{position:relative}
 .lb-img img{max-width:min(1400px,100%);max-height:100%;object-fit:contain;border-radius:6px;background:#fff;transition:opacity .2s}
@@ -276,3 +281,5 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .danger{border:0;background:none;padding:8px 0;color:var(--err);font-size:14px;text-decoration:underline;text-underline-offset:3px}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* Subtitle breaks between phrases, never mid-phrase. */
+.brand small span{white-space:nowrap}

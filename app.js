@@ -306,9 +306,11 @@ class App extends Component {
     <div class="wrap ${onVote ? '' : 'wide'} top-in">
       <div class="brand">
         <img src="assets/seal.webp" alt="ตราวิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
-        <div><b>วิทยาลัยอาชีวศึกษาร้อยเอ็ด</b><small>วันสถาปนาครบรอบ 88 ปี · สถานศึกษารางวัลพระราชทาน ปีการศึกษา 2568</small></div>
+        <div><b>วิทยาลัยอาชีวศึกษาร้อยเอ็ด</b><small><span>วันสถาปนาครบรอบ 88 ปี</span> <span>สถานศึกษารางวัลพระราชทาน</span> <span>ปีการศึกษา 2568</span></small></div>
       </div>
-      <button class="top-link" onClick=${() => (onVote ? this.goResults() : this.setTab('vote'))}>${onVote ? 'ดูผลโหวต' : 'กลับไปโหวต'}</button>
+      ${onVote
+        ? html`<button class="top-link results-btn" onClick=${() => this.goResults()}><img src="assets/results-icon.webp" alt="" width="34" height="34" />ผลโหวต</button>`
+        : html`<button class="top-link" onClick=${() => this.setTab('vote')}>กลับไปโหวต</button>`}
     </div>
   </header>
 
@@ -754,10 +756,13 @@ class App extends Component {
     const pct = prog.total ? Math.min(100, Math.round(prog.loaded / prog.total * 100)) : null;
     const retry = () => { this._lbWant = null; this.setState({ lbFailed: null }); };
     return html`
-<div class="lb" role="dialog" aria-modal="true" aria-label=${d.label}>
+<div class="lb" role="dialog" aria-modal="true" aria-label=${d.label}
+  onClick=${e => { if (!e.target.closest('img, button')) this.setState({ lightbox: null }); }}>
   <div class="lb-top">
     <b>${d.label}</b>
-    <button class="lb-close" onClick=${() => this.setState({ lightbox: null })}>ปิด</button>
+    <button class="lb-close" aria-label="ปิด" onClick=${() => this.setState({ lightbox: null })}>
+      <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </button>
   </div>
   <div class="lb-img" aria-busy=${status === 'loading'}>
     ${url && html`<img key=${src} src=${url} alt=${`${d.label} ${lb.kind === 'chart' ? 'ตารางไซซ์' : 'ภาพรายละเอียด'}`} />`}
