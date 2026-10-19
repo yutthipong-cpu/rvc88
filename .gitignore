@@ -11,3 +11,4 @@ data/staff.json
 node_modules/
 # Local design previews
 font-preview.html
+logo-preview.html

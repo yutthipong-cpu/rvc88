@@ -42,11 +42,11 @@ h1,h2,h3,p{margin:0}
 .results-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.7)}
 
 /* Intro */
-.intro{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;padding-top:20px;padding-bottom:20px}
-.intro-logo{grid-row:span 2;width:128px;mix-blend-mode:multiply}
-.intro h1{font:600 clamp(26px,7vw,36px)/1.25 var(--display);color:var(--navy)}
-.intro p{font-size:15px;color:var(--muted);line-height:1.55}
-.intro .count{grid-column:1/-1;margin-top:10px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;color:var(--ink)}
+.intro{background:linear-gradient(180deg,#E3EDF7 0%,#EEF3F9 70%,var(--paper) 100%);text-align:center;padding:18px 0 16px}
+.intro-logo{display:block;width:min(320px,86%);height:auto;margin:0 auto 10px}
+.intro h1{font:600 clamp(26px,7vw,34px)/1.25 var(--display);color:var(--navy)}
+.intro p{font-size:15px;color:var(--muted);line-height:1.55;margin-top:6px}
+.intro .count{display:inline-block;margin-top:12px;padding:4px 14px;border-radius:99px;background:rgba(255,255,255,.8);font-size:15px;color:var(--ink)}
 .count b{font-size:17px}
 
 /* Form blocks */

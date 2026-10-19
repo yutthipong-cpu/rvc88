@@ -475,11 +475,13 @@ class App extends Component {
     const chartFor = s.design || '1';
 
     return html`
-<section class="wrap intro">
-  <img class="intro-logo" src="assets/logo-88.webp" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
-  <h1>เลือกเสื้อที่ระลึก <span style="white-space:nowrap">88 ปี</span></h1>
-  <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
-  <p class="count">${this.countText(s.names, total)}</p>
+<section class="intro">
+  <div class="wrap">
+    <img class="intro-logo" src="assets/logo-88.webp" width="640" height="424" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
+    <h1>โหวตเลือกเสื้อที่ระลึก</h1>
+    <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
+    <p class="count">${this.countText(s.names, total)}</p>
+  </div>
 </section>
 
 <main class="wrap form">
