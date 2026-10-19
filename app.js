@@ -309,7 +309,7 @@ class App extends Component {
         <div><b>วิทยาลัยอาชีวศึกษาร้อยเอ็ด</b><small><span>วันสถาปนาครบรอบ 88 ปี</span> <span>สถานศึกษารางวัลพระราชทาน</span> <span>ปีการศึกษา 2568</span></small></div>
       </div>
       ${onVote
-        ? html`<button class="top-link results-btn" onClick=${() => this.goResults()}><img src="assets/results-icon.webp" alt="" width="34" height="34" />ผลโหวต</button>`
+        ? html`<button class="results-btn" aria-label="ดูผลโหวต" title="ดูผลโหวต" onClick=${() => this.goResults()}><img src="assets/results-icon.webp" alt="" width="40" height="40" /></button>`
         : html`<button class="top-link" onClick=${() => this.setTab('vote')}>กลับไปโหวต</button>`}
     </div>
   </header>
