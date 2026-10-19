@@ -9,3 +9,5 @@ data/staff.json
 .env
 .claude/
 node_modules/
+# Local design previews
+font-preview.html

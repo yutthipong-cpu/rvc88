@@ -9,8 +9,8 @@
   --mark:#C8102E;       /* the tape's red reading line */
   --ok:#237A4B;
   --err:#B42318;
-  --display:'Chonburi',serif;
-  --body:'Noto Sans Thai Looped','Noto Sans Thai',system-ui,sans-serif;
+  --display:'Pridi',serif;
+  --body:'Anuphan',system-ui,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
 }
 *{box-sizing:border-box}
@@ -42,7 +42,7 @@ h1,h2,h3,p{margin:0}
 /* Intro */
 .intro{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;padding-top:20px;padding-bottom:20px}
 .intro-logo{grid-row:span 2;width:128px;mix-blend-mode:multiply}
-.intro h1{font:400 clamp(26px,7vw,36px)/1.25 var(--display);color:var(--navy)}
+.intro h1{font:600 clamp(26px,7vw,36px)/1.25 var(--display);color:var(--navy)}
 .intro p{font-size:15px;color:var(--muted);line-height:1.55}
 .intro .count{grid-column:1/-1;margin-top:10px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;color:var(--ink)}
 .count b{font-size:17px}
@@ -170,7 +170,7 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 /* Done sheet */
 .backdrop{position:fixed;inset:0;z-index:90;background:rgba(10,18,38,.55);display:flex;align-items:flex-end;justify-content:center}
 .sheet{width:100%;max-width:480px;background:#fff;border-radius:16px 16px 0 0;padding:24px 20px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px;animation:rise .22s ease-out}
-.sheet h2{font:400 26px/1.3 var(--display);color:var(--navy)}
+.sheet h2{font:600 26px/1.3 var(--display);color:var(--navy)}
 .sheet p{color:var(--muted)}
 .sheet dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;padding:14px;border-radius:10px;background:var(--paper)}
 .sheet dt{color:var(--muted)}
@@ -194,7 +194,7 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 
 /* Results */
 .results{display:flex;flex-direction:column;gap:12px;padding-top:20px;padding-bottom:32px}
-.page-title{font:400 clamp(26px,7vw,34px)/1.25 var(--display);color:var(--navy)}
+.page-title{font:600 clamp(26px,7vw,34px)/1.25 var(--display);color:var(--navy)}
 .results > .count{font-size:15px;margin-top:-4px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
 .panel h2{font-size:17px;font-weight:700;line-height:1.3}
@@ -206,7 +206,7 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .tally-name{display:flex;align-items:center;gap:8px;font-weight:700}
 .lead-tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--navy);color:#fff}
 .tally-num{display:flex;align-items:baseline;gap:8px;color:var(--muted);font-size:14px}
-.tally-num b{font:400 34px/1.15 var(--display);color:var(--ink)}
+.tally-num b{font:600 34px/1.15 var(--display);color:var(--ink)}
 .meter{height:8px;border-radius:99px;background:#E6EAF1;overflow:hidden;margin-top:4px}
 .meter i{display:block;height:100%;border-radius:99px;background:#8A9BBD;transition:width .4s}
 .lead .meter i{background:var(--navy)}
