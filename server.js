@@ -139,16 +139,13 @@ async function api(req, res, url) {
     // A first name and a surname, letters only.
     if (!known && !(/^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(name) && /\S\s+\S/.test(name))) return send(res, 400, { error: 'กรอกชื่อและนามสกุลให้ถูกต้อง' });
     if (!['1', '2'].includes(b.design)) return send(res, 400, { error: 'กรุณาเลือกแบบเสื้อ' });
-    if (!['m', 'f'].includes(b.cut)) return send(res, 400, { error: 'กรุณาเลือกทรงเสื้อ' });
     if (!SIZES.includes(b.size)) return send(res, 400, { error: 'กรุณาเลือกไซซ์' });
-    // Shirts after the first are paid by the voter; each has its own cut and size.
+    // Shirts after the first are paid by the voter; each has its own size (one cut for everyone).
     // The design is the vote, so it is chosen once and does not apply per shirt.
     const extras = Array.isArray(b.extras) ? b.extras : [];
     if (extras.length > 9) return send(res, 400, { error: 'สั่งได้สูงสุด 10 ตัว' });
     for (const [i, x] of extras.entries()) {
-      if (!x || !['m', 'f'].includes(x.cut) || !SIZES.includes(x.size)) {
-        return send(res, 400, { error: `เลือกทรงและไซซ์ของตัวที่ ${i + 2} ให้ครบ` });
-      }
+      if (!x || !SIZES.includes(x.size)) return send(res, 400, { error: `เลือกไซซ์ของตัวที่ ${i + 2}` });
     }
     if (!validPhone(b.phone)) return send(res, 400, { error: 'กรอกเบอร์โทร 9–10 หลัก' });
     const prev = votes.find(v => v.name === name);
@@ -158,8 +155,8 @@ async function api(req, res, url) {
       if (bad) return send(res, bad.status, { error: bad.error });
     }
     const vote = {
-      name, dept: known ? staffByName.get(name) : OTHER_DEPT, ...(known ? {} : { other: true }), design: b.design, cut: b.cut, size: b.size,
-      extras: extras.map(x => ({ cut: x.cut, size: x.size })),
+      name, dept: known ? staffByName.get(name) : OTHER_DEPT, ...(known ? {} : { other: true }), design: b.design, size: b.size,
+      extras: extras.map(x => ({ size: x.size })),
       qty: 1 + extras.length,
       phone: digits(b.phone),
       note: String(b.note || '').trim().slice(0, 500),

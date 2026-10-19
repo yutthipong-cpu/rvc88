@@ -5,23 +5,19 @@ const DEFAULT_CONFIG = { votingOpen: true, allowChangeVote: true, hideResults: f
 const POLL_MS = 10000;
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
-const CHART = {
-  m: { chest: [34, 36, 38, 40, 42, 44, 46, 48], len: [24, 25, 26, 27, 28, 29, 30, 31] },
-  f: { chest: [32, 34, 36, 38, 40, 42, 44, 46], len: [23, 24, 25, 26, 27, 28, 29, 30] }
-};
-const CUTS = [{ id: 'm', label: 'ทรงชาย' }, { id: 'f', label: 'ทรงหญิง' }];
+// One cut for everyone (from the shop's size chart), in inches.
+const CHART = { chest: [34, 36, 38, 40, 42, 44, 46, 48], len: [24, 25, 26, 27, 28, 29, 30, 31] };
 const DESIGNS = [
   { id: '1', label: 'แบบที่ 1', tone: 'น้ำเงินเข้ม ชายเสื้อลายไทยสีทอง', front: 'assets/d2-front.png', back: 'assets/d2-back.png', board: 'assets/d2-board.jpg', chart: 'assets/d2-size.jpg' },
   { id: '2', label: 'แบบที่ 2', tone: 'ฟ้า–ขาว เส้นทองพลิ้ว', front: 'assets/d1-front.png', back: 'assets/d1-back.png', board: 'assets/d1-board.jpg', chart: 'assets/d1-size.jpg' }
 ];
 const ORDER = ['ฝ่ายบริหาร', 'ผู้ช่วยศาสตราจารย์', 'แผนกวิชาสามัญสัมพันธ์', 'แผนกวิชาการบัญชี', 'แผนกวิชาการตลาด', 'แผนกวิชาโลจิสติกส์', 'แผนกวิชาเทคโนโลยีธุรกิจดิจิทัล', 'แผนกวิชาเทคโนโลยีสารสนเทศ', 'แผนกวิชาวิจิตรศิลป์', 'แผนกวิชาออกแบบ', 'แผนกวิชาคอมพิวเตอร์กราฟิก', 'แผนกวิชาแฟชั่นและสิ่งทอ', 'แผนกวิชาคหกรรมศาสตร์', 'แผนกวิชาอาหารและโภชนาการ', 'แผนกวิชาการโรงแรม', 'แผนกวิชาการท่องเที่ยว', 'ลูกจ้างชั่วคราว', 'นักการ', 'แม่บ้าน', 'พนักงานขับรถ', 'ยามรักษาการ'];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
-// The size tape spans 16 inches: one inch either side of the cut's smallest and largest chest.
+// The size tape spans 16 inches: one inch either side of the smallest and largest chest.
 const TAPE_SPAN = 16;
 
 const norm = s => (s || '').replace(/\s+/g, '').toLowerCase();
 const fmtTime = t => new Date(t).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-const cutLabel = c => c === 'f' ? 'หญิง' : 'ชาย';
 const dLabel = id => (DESIGNS.find(d => d.id === id) || {}).label || '—';
 const MAX_EXTRAS = 9;
 const digits = s => String(s || '').replace(/\D/g, '');
@@ -29,11 +25,11 @@ const validPhone = s => /^\d{9,10}$/.test(digits(s));
 // Same rule as the server for names that are not on the staff list.
 const OTHER_DEPT = 'อื่นๆ';
 const validName = s => /^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(s) && /\S\s+\S/.test(s);
-// Every shirt in a vote: the first (free) then the paid extras. Shirts have a cut and size only;
+// Every shirt in a vote: the first (free) then the paid extras. Shirts have a size only;
 // the design is the vote. Older votes stored only a quantity, so their extras repeat the first shirt.
-const extrasOf = v => v.extras || Array.from({ length: Math.max(0, (v.qty || 1) - 1) }, () => ({ cut: v.cut, size: v.size }));
-const shirtsOf = v => [{ cut: v.cut, size: v.size }, ...extrasOf(v)];
-const shirtText = x => `${cutLabel(x.cut)} ${x.size}`;
+const extrasOf = v => v.extras || Array.from({ length: Math.max(0, (v.qty || 1) - 1) }, () => ({ size: v.size }));
+const shirtsOf = v => [{ size: v.size }, ...extrasOf(v)];
+const shirtText = x => `ไซซ์ ${x.size}`;
 const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 let xlsxLoading = null;
 const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, reject) => {
@@ -45,7 +41,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', cut: null, size: null, extras: [], done: null, confirm: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -147,11 +143,10 @@ class App extends Component {
     const out = [];
     st.forEach(p => {
       if (rnd() < 0.62) {
-        const cut = rnd() < 0.6 ? 'f' : 'm';
         const si = Math.min(7, Math.max(0, Math.round(3 + (rnd() + rnd() - 1) * 3)));
         const design = rnd() < 0.57 ? '2' : '1';
-        const extras = rnd() < 0.88 ? [] : [{ cut: rnd() < 0.5 ? 'm' : 'f', size: SIZES[Math.max(0, si - 1)] }];
-        out.push({ name: p.name, dept: p.dept, design, cut, size: SIZES[si], extras, qty: 1 + extras.length, phone: '', note: '', time: Date.now() - Math.floor(rnd() * 5 * 864e5) });
+        const extras = rnd() < 0.88 ? [] : [{ size: SIZES[Math.max(0, si - 1)] }];
+        out.push({ name: p.name, dept: p.dept, design, size: SIZES[si], extras, qty: 1 + extras.length, phone: '', note: '', time: Date.now() - Math.floor(rnd() * 5 * 864e5) });
       }
     });
     this._sample = out; this._sampleN = st.length; return out;
@@ -162,7 +157,7 @@ class App extends Component {
     // Someone who already voted must give their phone number before the old vote is shown (see unlockVote).
     // Clear choices that came from someone else's opened vote, or that would hide behind the phone check.
     const clear = this.state.prevVote || this.state.names.includes(p.name)
-      ? { design: null, cut: null, size: null, extras: [], note: '', extra: false } : {};
+      ? { design: null, size: null, extras: [], note: '', extra: false } : {};
     // Keep a phone number typed before the name, unless it belonged to someone else's opened vote.
     const phone = this.state.prevVote ? '' : this.state.phone;
     this.setState({ person: p, query: '', open: false, prevVote: null, phone, unlockErr: '', error: '', ...clear });
@@ -180,7 +175,7 @@ class App extends Component {
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'ตรวจสอบไม่สำเร็จ');
       const v = body.vote;
-      this.setState({ unlocking: false, prevVote: v, design: v.design, cut: v.cut, size: v.size, extras: extrasOf(v), note: v.note || '', extra: !!v.note });
+      this.setState({ unlocking: false, prevVote: v, design: v.design, size: v.size, extras: extrasOf(v), note: v.note || '', extra: !!v.note });
     } catch (e) {
       this.setState({ unlocking: false, unlockErr: e.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองอีกครั้ง' : e.message });
     }
@@ -192,7 +187,7 @@ class App extends Component {
     try {
       const r = await fetch('api/votes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: s.person.name, design: s.design, cut: s.cut, size: s.size, extras: s.extras, phone: digits(s.phone), note: s.note.trim() })
+        body: JSON.stringify({ name: s.person.name, design: s.design, size: s.size, extras: s.extras.map(x => ({ size: x.size })), phone: digits(s.phone), note: s.note.trim() })
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'บันทึกไม่สำเร็จ');
@@ -202,7 +197,7 @@ class App extends Component {
     }
   }
   resetForm() {
-    this.setState({ person: null, prevVote: null, unlockErr: '', query: '', phone: '', note: '', extra: false, design: null, cut: null, size: null, extras: [], done: null, side: 'front' });
+    this.setState({ person: null, prevVote: null, unlockErr: '', query: '', phone: '', note: '', extra: false, design: null, size: null, extras: [], done: null, side: 'front' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   setTab(tab) {
@@ -214,10 +209,10 @@ class App extends Component {
 
   sortedVotes() { return this.shownVotes().slice().sort((a, b) => a.time - b.time); }
   exportRows() {
-    const head = ['ลำดับ', 'ชื่อ-สกุล', 'แผนก/ฝ่าย', 'แบบที่โหวต', 'ทรง', 'ไซซ์', 'จำนวนรวม (ตัว)', 'ชำระเอง (ตัว)', 'เสื้อตัวที่ชำระเอง', 'เบอร์โทร', 'หมายเหตุ', 'เวลาโหวต'];
+    const head = ['ลำดับ', 'ชื่อ-สกุล', 'แผนก/ฝ่าย', 'แบบที่โหวต', 'ไซซ์', 'จำนวนรวม (ตัว)', 'ชำระเอง (ตัว)', 'เสื้อตัวที่ชำระเอง', 'เบอร์โทร', 'หมายเหตุ', 'เวลาโหวต'];
     const rows = this.sortedVotes().map((v, i) => {
       const extras = extrasOf(v);
-      return [i + 1, v.name, v.dept, dLabel(v.design), cutLabel(v.cut), v.size, 1 + extras.length, extras.length,
+      return [i + 1, v.name, v.dept, dLabel(v.design), v.size, 1 + extras.length, extras.length,
         extras.map((x, j) => `ตัวที่ ${j + 2}: ${shirtText(x)}`).join(', '), v.phone || '', v.note || '', fmtTime(v.time)];
     });
     return [head, ...rows];
@@ -228,33 +223,27 @@ class App extends Component {
     const votes = this.shownVotes();
     const wb = XLSX.utils.book_new();
     const list = XLSX.utils.aoa_to_sheet(this.exportRows());
-    list['!cols'] = [6, 28, 30, 10, 6, 6, 12, 12, 40, 14, 30, 18].map(w => ({ wch: w }));
+    list['!cols'] = [6, 28, 30, 10, 6, 12, 12, 40, 14, 30, 18].map(w => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, list, 'รายชื่อผู้โหวต');
     // One row per shirt, for handing out shirts and collecting payment.
-    const each = [['ลำดับ', 'ชื่อ-สกุล', 'แผนก/ฝ่าย', 'ตัวที่', 'ทรง', 'ไซซ์', 'ค่าใช้จ่าย']];
-    this.sortedVotes().forEach(v => shirtsOf(v).forEach((x, j) => each.push([each.length, v.name, v.dept, j + 1, cutLabel(x.cut), x.size, j === 0 ? 'ฟรี' : 'ชำระเอง'])));
+    const each = [['ลำดับ', 'ชื่อ-สกุล', 'แผนก/ฝ่าย', 'ตัวที่', 'ไซซ์', 'ค่าใช้จ่าย']];
+    this.sortedVotes().forEach(v => shirtsOf(v).forEach((x, j) => each.push([each.length, v.name, v.dept, j + 1, x.size, j === 0 ? 'ฟรี' : 'ชำระเอง'])));
     const sheetEach = XLSX.utils.aoa_to_sheet(each);
-    sheetEach['!cols'] = [6, 28, 30, 6, 6, 6, 10].map(w => ({ wch: w }));
+    sheetEach['!cols'] = [6, 28, 30, 6, 6, 10].map(w => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, sheetEach, 'เสื้อทุกตัว');
-    // Order sheet: every shirt by cut and size.
+    // Order sheet: every shirt by size.
     const all = votes.flatMap(shirtsOf);
-    const count = (c, z) => all.filter(x => x.cut === c && x.size === z).length;
-    const order = [['ทรง', ...SIZES, 'รวม']];
-    CUTS.forEach(c => {
-      const n = SIZES.map(z => count(c.id, z));
-      order.push([c.label, ...n, n.reduce((a, b) => a + b, 0)]);
-    });
-    const sums = SIZES.map((_, k) => order.slice(1).reduce((a, r) => a + r[k + 1], 0));
-    order.push(['รวม', ...sums, sums.reduce((a, b) => a + b, 0)]);
+    const n = SIZES.map(z => all.filter(x => x.size === z).length);
+    const order = [['ไซซ์', ...SIZES, 'รวม'], ['จำนวน (ตัว)', ...n, n.reduce((a, b) => a + b, 0)]];
     const sheet2 = XLSX.utils.aoa_to_sheet(order);
-    sheet2['!cols'] = [{ wch: 8 }, ...SIZES.map(() => ({ wch: 6 })), { wch: 6 }];
+    sheet2['!cols'] = [{ wch: 12 }, ...SIZES.map(() => ({ wch: 6 })), { wch: 6 }];
     XLSX.utils.book_append_sheet(wb, sheet2, 'สรุปจำนวนสั่งผลิต');
     XLSX.writeFile(wb, 'ผลโหวตแบบเสื้อ-88ปี.xlsx');
   }
   exportCsv() {
     const esc = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
     // Keep phone numbers as text so Excel does not drop the leading zero.
-    const lines = this.exportRows().map((r, i) => r.map((x, j) => (i > 0 && j === 9 && x ? '="' + x + '"' : x)).map(esc).join(','));
+    const lines = this.exportRows().map((r, i) => r.map((x, j) => (i > 0 && j === 8 && x ? '="' + x + '"' : x)).map(esc).join(','));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ผลโหวตแบบเสื้อ-88ปี.csv';
     document.body.appendChild(a); a.click(); a.remove();
@@ -307,7 +296,7 @@ class App extends Component {
       <div class="person">
         <div><b>${s.person.name}</b><small>${s.person.dept}</small></div>
         <button class="btn btn-ghost" style="height:40px;padding:0 14px;font-size:15px" onClick=${() => this.setState(st => ({ person: null, prevVote: null, unlockErr: '', query: '', open: true,
-          ...(st.prevVote ? { phone: '', design: null, cut: null, size: null, extras: [], note: '', extra: false } : {}) }))}>เปลี่ยนชื่อ</button>
+          ...(st.prevVote ? { phone: '', design: null, size: null, extras: [], note: '', extra: false } : {}) }))}>เปลี่ยนชื่อ</button>
       </div>`;
 
     const q = norm(s.query);
@@ -351,24 +340,21 @@ class App extends Component {
       </div>`;
   }
 
-  // Cut toggle plus the size tape for one shirt. Used for shirt 1 and every extra shirt.
+  // The size tape for one shirt. Used for shirt 1 and every extra shirt.
   renderSizePicker(shirt, onChange, label) {
-    const { cut, size } = shirt;
-    const chart = CHART[cut || 'm'];
+    const { size } = shirt;
+    const chart = CHART;
     const min = chart.chest[0] - 1;
     const pos = inch => ((inch - min) / TAPE_SPAN * 100) + '%';
     const idx = SIZES.indexOf(size);
-    const readAt = cut && idx >= 0 ? chart.chest[idx] : null;
+    const readAt = idx >= 0 ? chart.chest[idx] : null;
     const nums = [];
     for (let i = min + 1; i < min + TAPE_SPAN; i += 2) nums.push(i);
     return html`
-      <div class="seg full" role="group" aria-label=${`ทรง${label}`}>
-        ${CUTS.map(c => html`<button aria-pressed=${cut === c.id} onClick=${() => onChange({ cut: c.id })}>${c.label}</button>`)}
-      </div>
-      <div class="tape ${cut ? '' : 'off'}" role="group" aria-label=${`ไซซ์${label}`}>
+      <div class="tape" role="group" aria-label=${`ไซซ์${label}`}>
         <div class="tape-marks">
           ${SIZES.map((code, i) => html`
-            <button class="size-mark" style="left:${pos(chart.chest[i])}" aria-pressed=${size === code} disabled=${!cut}
+            <button class="size-mark" style="left:${pos(chart.chest[i])}" aria-pressed=${size === code}
               aria-label=${`${code} รอบอก ${chart.chest[i]} นิ้ว`} onClick=${() => onChange({ size: code })}>${code}</button>`)}
         </div>
         <div class="tape-strip" aria-hidden="true">
@@ -376,8 +362,7 @@ class App extends Component {
           ${readAt != null && html`<span class="tape-read" style="left:${pos(readAt)}"></span>`}
         </div>
       </div>
-      <p class="reading">${!cut ? 'เลือกทรงก่อน ไซซ์จะแสดงตามรอบอกจริง'
-        : idx < 0 ? 'แตะไซซ์บนสายวัด ตัวเลขคือรอบอก (นิ้ว)'
+      <p class="reading">${idx < 0 ? 'แตะไซซ์บนสายวัด ตัวเลขคือรอบอก (นิ้ว)'
         : html`<b>${size}</b> · รอบอก <b class="mono">${chart.chest[idx]}"</b> · ยาว <b class="mono">${chart.len[idx]}"</b> <span class="hint">(±1 นิ้ว)</span>`}</p>`;
   }
 
@@ -385,9 +370,9 @@ class App extends Component {
     this.setState(st => ({ extras: st.extras.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
   }
   addExtra() {
-    // Start from the first shirt's cut and size; most people order more of the same.
+    // Start from the first shirt's size; most people order more of the same.
     this.setState(st => st.extras.length >= MAX_EXTRAS ? null
-      : { extras: st.extras.concat({ cut: st.cut, size: st.size }) });
+      : { extras: st.extras.concat({ size: st.size }) });
   }
 
   renderExtras() {
@@ -396,7 +381,7 @@ class App extends Component {
     return html`
   <section class="block">
     <div class="block-head"><h2>สั่งเสื้อเพิ่ม</h2></div>
-    <p class="hint">ในกรณีที่สั่งมากกว่า 1 ตัว ท่านจะต้องชำระเงินเองในตัวถัดไป เลือกทรงและไซซ์ของแต่ละตัว</p>
+    <p class="hint">ในกรณีที่สั่งมากกว่า 1 ตัว ท่านจะต้องชำระเงินเองในตัวถัดไป เลือกไซซ์ของแต่ละตัว</p>
     ${s.extras.map((x, i) => html`
       <div class="extra" key=${i}>
         <div class="extra-head">
@@ -423,15 +408,14 @@ class App extends Component {
     if (!s.person) missing.push('ชื่อ');
     if (!needsUnlock && !validPhone(s.phone)) missing.push('เบอร์โทร');
     if (!s.design) missing.push('แบบเสื้อ');
-    if (!s.cut) missing.push('ทรง');
     if (!s.size) missing.push('ไซซ์');
-    s.extras.forEach((x, i) => { if (!x.cut || !x.size) missing.push(`ตัวที่ ${i + 2}`); });
+    s.extras.forEach((x, i) => { if (!x.size) missing.push(`ตัวที่ ${i + 2}`); });
     const canSubmit = !missing.length && !locked && !s.saving;
     const hint = s.error || (locked ? (!isOpen ? 'ปิดรับโหวตแล้ว' : !allowChange ? 'ท่านโหวตแล้ว แก้ไขไม่ได้' : 'ใส่เบอร์โทรที่ใช้ตอนโหวตเพื่อแก้ไข')
       : missing.length ? 'ยังขาด: ' + missing.join(', ')
       : prev ? 'จะบันทึกทับโหวตเดิม' : 'ครบแล้ว กดยืนยันได้');
     const hintClass = s.error || locked ? 'err' : missing.length ? '' : 'ok';
-    const summary = ([s.design && dLabel(s.design), s.cut && s.size && `${cutLabel(s.cut)} ${s.size}`].filter(Boolean).join(' · ') || 'ยังไม่ได้เลือกเสื้อ')
+    const summary = ([s.design && dLabel(s.design), s.size && `ไซซ์ ${s.size}`].filter(Boolean).join(' · ') || 'ยังไม่ได้เลือกเสื้อ')
       + (s.extras.length ? ` + เพิ่ม ${s.extras.length} ตัว` : '');
     const chartFor = s.design || '1';
 
@@ -439,7 +423,7 @@ class App extends Component {
 <section class="wrap intro">
   <img class="intro-logo" src="assets/logo-88.png" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
   <h1>เลือกเสื้อที่ระลึก 88 ปี</h1>
-  <p>เลือกแบบที่ชอบ แล้วระบุทรงและไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
+  <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
   <p class="count">${this.countText(s.names, total)}</p>
 </section>
 
@@ -491,7 +475,7 @@ class App extends Component {
 
   <section class="block">
     <div class="block-head">
-      <h2>ทรงและไซซ์ ตัวที่ 1 <span class="req">*</span></h2>
+      <h2>ไซซ์ ตัวที่ 1 <span class="req">*</span></h2>
       <button class="text-btn" onClick=${() => this.setState({ lightbox: { id: chartFor, kind: 'chart' } })}>ตารางไซซ์</button>
     </div>
     ${this.renderSizePicker(s, patch => this.setState(patch), ' ตัวที่ 1')}
@@ -548,11 +532,9 @@ class App extends Component {
     const counts = DESIGNS.map(d => votes.filter(v => v.design === d.id).length);
     const maxC = Math.max(...counts), tie = counts.every(c => c === counts[0]);
 
-    // Shirt counts include every shirt ordered, filtered by the design chosen above the table.
+    // Shirt counts include every shirt ordered.
     const shirts = votes.flatMap(shirtsOf);
-    const sumBy = (cut, z) => shirts.filter(x => (!cut || x.cut === cut) && x.size === z).length;
-    const sizeRows = SIZES.map(z => ({ z, m: sumBy('m', z), f: sumBy('f', z), all: sumBy(null, z) }));
-    const tot = k => sizeRows.reduce((a, r) => a + r[k], 0);
+    const sizeRows = SIZES.map(z => ({ z, n: shirts.filter(x => x.size === z).length }));
     const cell = n => html`<td class=${n ? 'mono' : 'mono zero'}>${n || '–'}</td>`;
 
     const votedNames = new Set(votes.map(v => v.name));
@@ -610,9 +592,9 @@ class App extends Component {
       <h2>จำนวนเสื้อที่ต้องสั่งผลิต</h2>
       <p class="hint">นับทุกตัว รวมตัวที่ชำระเอง</p>
       <table class="sizes">
-        <thead><tr><th>ไซซ์</th><th>ชาย</th><th>หญิง</th><th>รวม</th></tr></thead>
-        <tbody>${sizeRows.map(r => html`<tr><td>${r.z}</td>${cell(r.m)}${cell(r.f)}${cell(r.all)}</tr>`)}</tbody>
-        <tfoot><tr><td>รวม</td><td class="mono">${tot('m')}</td><td class="mono">${tot('f')}</td><td class="mono">${tot('all')}</td></tr></tfoot>
+        <thead><tr><th>ไซซ์</th><th>รอบอก</th><th>จำนวน (ตัว)</th></tr></thead>
+        <tbody>${sizeRows.map((r, i) => html`<tr><td>${r.z}</td><td class="mono" style="color:var(--muted)">${CHART.chest[i]}"</td>${cell(r.n)}</tr>`)}</tbody>
+        <tfoot><tr><td>รวม</td><td></td><td class="mono">${shirts.length}</td></tr></tfoot>
       </table>
     </section>
 
@@ -658,7 +640,7 @@ class App extends Component {
   // Last check before saving: everything the vote will record, with a way back to edit.
   renderConfirm() {
     const s = this.state;
-    const shirts = [{ cut: s.cut, size: s.size }, ...s.extras];
+    const shirts = [{ size: s.size }, ...s.extras];
     const editing = !!(s.prevVote && s.person && s.prevVote.name === s.person.name);
     const close = () => { if (!s.saving) this.setState({ confirm: false }); };
     return html`
