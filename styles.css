@@ -38,9 +38,8 @@ h1,h2,h3,p{margin:0}
 .brand small{display:block;font-size:12px;line-height:1.35;opacity:.8}
 .top-link{flex:none;height:38px;padding:0 14px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-size:15px;font-weight:600}
 .top-link:hover{background:rgba(255,255,255,.1)}
-.results-btn{flex:none;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:#fff;overflow:hidden;opacity:.92}
-.results-btn img{width:40px;height:40px;object-fit:cover}
-.results-btn:hover{opacity:1}
+.results-btn{flex:none;width:38px;height:38px;display:grid;place-items:center;padding:0;border:1.5px solid rgba(255,255,255,.45);border-radius:50%;background:transparent;color:#fff}
+.results-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.7)}
 
 /* Intro */
 .intro{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;padding-top:20px;padding-bottom:20px}
