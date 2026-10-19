@@ -836,4 +836,8 @@ class App extends Component {
   }
 }
 
+// A reload clears the form, so always start again from the opening banner
+// instead of letting the browser restore the old scroll position.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+window.scrollTo(0, 0);
 render(html`<${App} />`, document.getElementById('app'));
