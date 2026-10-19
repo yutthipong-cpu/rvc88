@@ -60,7 +60,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -231,7 +231,7 @@ class App extends Component {
     }
   }
   resetForm() {
-    this.setState({ person: null, prevVote: null, unlockErr: '', query: '', phone: '', note: '', extra: false, design: null, size: null, extras: [], done: null, side: 'front' });
+    this.setState({ person: null, prevVote: null, unlockErr: '', query: '', phone: '', note: '', extra: false, design: null, size: null, extras: [], done: null, showMissing: false, side: 'front' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   setTab(tab) {
@@ -411,11 +411,12 @@ class App extends Component {
       : { extras: st.extras.concat({ size: st.size }) });
   }
 
-  renderExtras() {
+  renderExtras(stateClass, need) {
     const s = this.state;
     const n = s.extras.length;
     return html`
-  <section class="block">
+  <section class="block ${stateClass}" id="step-extra">
+    ${need && html`<p class="step-need" role="alert">${need}</p>`}
     <div class="block-head"><h2>สั่งเสื้อเพิ่ม</h2></div>
     <p class="hint">ในกรณีที่สั่งมากกว่า 1 ตัว ท่านจะต้องชำระเงินเองในตัวถัดไป เลือกไซซ์ของแต่ละตัว</p>
     ${s.extras.map((x, i) => html`
@@ -440,17 +441,35 @@ class App extends Component {
     const needsUnlock = !!(s.person && !prev && myVoted.has(s.person.name));
 
     const locked = !isOpen || ((prev || needsUnlock) && !allowChange) || needsUnlock;
-    const missing = [];
-    if (!s.person) missing.push('ชื่อ');
-    if (!needsUnlock && !validPhone(s.phone)) missing.push('เบอร์โทร');
-    if (!s.design) missing.push('แบบเสื้อ');
-    if (!s.size) missing.push('ไซซ์');
-    s.extras.forEach((x, i) => { if (!x.size) missing.push(`ตัวที่ ${i + 2}`); });
-    const canSubmit = !missing.length && !locked && !s.saving;
+    // Each section shows green when complete; red only after the voter presses confirm with gaps left.
+    const steps = [
+      { id: 'step-name', ok: !!s.person && !needsUnlock && validPhone(s.phone), need: !s.person ? 'เลือกชื่อของท่าน' : 'ใส่เบอร์โทร 9–10 หลัก' },
+      { id: 'step-design', ok: !!s.design, need: 'เลือกแบบที่ท่านโหวต' },
+      { id: 'step-size', ok: !!s.size, need: 'แตะไซซ์บนสายวัด' },
+      ...(s.extras.length ? [{ id: 'step-extra', ok: s.extras.every(x => x.size), need: 'เลือกไซซ์ของเสื้อที่สั่งเพิ่มให้ครบ' }] : [])
+    ];
+    const okCount = steps.filter(x => x.ok).length, allOk = okCount === steps.length;
+    const step = id => steps.find(x => x.id === id) || { ok: true };
+    const stepClass = id => (step(id).ok ? 'done' : s.showMissing ? 'missing' : '');
+    const stepMark = id => step(id).ok
+      ? html`<span class="step-ok" aria-label="กรอกแล้ว"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
+      : s.showMissing ? html`<p class="step-need" role="alert">${step(id).need}</p>` : null;
+    const canSubmit = !locked && !s.saving;
+    const onSubmit = () => {
+      if (!canSubmit) return;
+      if (!allOk) {
+        this.setState({ showMissing: true });
+        const first = steps.find(x => !x.ok);
+        const el = first && document.getElementById(first.id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      this.setState({ confirm: true, error: '' });
+    };
     const hint = s.error || (locked ? (!isOpen ? 'ปิดรับโหวตแล้ว' : !allowChange ? 'ท่านโหวตแล้ว แก้ไขไม่ได้' : 'ใส่เบอร์โทรที่ใช้ตอนโหวตเพื่อแก้ไข')
-      : missing.length ? 'ยังขาด: ' + missing.join(', ')
-      : prev ? 'จะบันทึกทับโหวตเดิม' : 'ครบแล้ว กดยืนยันได้');
-    const hintClass = s.error || locked ? 'err' : missing.length ? '' : 'ok';
+      : allOk ? (prev ? 'ครบแล้ว จะบันทึกทับโหวตเดิม' : 'ครบแล้ว กดยืนยันได้')
+      : `กรอกแล้ว ${okCount} จาก ${steps.length}`);
+    const hintClass = s.error || locked ? 'err' : allOk ? 'ok' : s.showMissing ? 'err' : '';
     const summary = ([s.design && dLabel(s.design), s.size && `ไซซ์ ${s.size}`].filter(Boolean).join(' · ') || 'ยังไม่ได้เลือกเสื้อ')
       + (s.extras.length ? ` + เพิ่ม ${s.extras.length} ตัว` : '');
     const chartFor = s.design || '1';
@@ -466,8 +485,9 @@ class App extends Component {
 <main class="wrap form">
   ${!isOpen && html`<div class="notice closed">ปิดรับโหวตแล้ว ขอบคุณทุกท่านที่ร่วมเลือก</div>`}
 
-  <section class="block">
-    <div class="block-head"><h2>ชื่อและเบอร์โทร</h2></div>
+  <section class="block ${stepClass('step-name')}" id="step-name">
+    <div class="block-head"><h2>ชื่อและเบอร์โทร ${step('step-name').ok && stepMark('step-name')}</h2></div>
+    ${!step('step-name').ok && stepMark('step-name')}
     <span class="field-label" style="margin-top:0">ชื่อ – สกุล <span class="req">*</span></span>
     ${this.renderNamePicker(myVoted)}
     ${needsUnlock && !allowChange ? html`<div class="notice info">ท่านโหวตแล้ว ระบบไม่เปิดให้แก้ไข</div>` : html`
@@ -484,9 +504,10 @@ class App extends Component {
     ${prev && html`<div class="notice info">ท่านโหวตไว้แล้วเมื่อ ${fmtTime(prev.time)} แก้ด้านล่างแล้วกดบันทึกได้</div>`}
   </section>
 
-  <section class="block">
+  <section class="block ${stepClass('step-design')}" id="step-design">
+    ${!step('step-design').ok && stepMark('step-design')}
     <div class="block-head">
-      <h2>แบบที่ท่านโหวต <span class="req">*</span></h2>
+      <h2>แบบที่ท่านโหวต <span class="req">*</span> ${step('step-design').ok && stepMark('step-design')}</h2>
       <div class="seg" role="group" aria-label="ด้านที่แสดง">
         <button aria-pressed=${s.side === 'front'} onClick=${() => this.setState({ side: 'front' })}>ด้านหน้า</button>
         <button aria-pressed=${s.side === 'back'} onClick=${() => this.setState({ side: 'back' })}>ด้านหลัง</button>
@@ -514,15 +535,16 @@ class App extends Component {
     </div>
   </section>
 
-  <section class="block">
+  <section class="block ${stepClass('step-size')}" id="step-size">
+    ${!step('step-size').ok && stepMark('step-size')}
     <div class="block-head">
-      <h2>ไซซ์ ตัวที่ 1 <span class="req">*</span></h2>
+      <h2>ไซซ์ ตัวที่ 1 <span class="req">*</span> ${step('step-size').ok && stepMark('step-size')}</h2>
       <button class="text-btn" onClick=${() => this.setState({ lightbox: { id: chartFor, kind: 'chart' } })}>ตารางไซซ์</button>
     </div>
     ${this.renderSizePicker(s, patch => this.setState(patch), ' ตัวที่ 1')}
   </section>
 
-  ${this.renderExtras()}
+  ${this.renderExtras(s.extras.length ? stepClass('step-extra') : '', s.extras.length && !step('step-extra').ok && s.showMissing ? step('step-extra').need : '')}
 
   <section class="block">
     <div class="block-head"><h2>หมายเหตุถึงผู้จัดทำ <span class="hint" style="font-weight:400">(ไม่บังคับ)</span></h2></div>
@@ -539,7 +561,7 @@ class App extends Component {
       <b>${summary}</b>
       <small class=${hintClass} aria-live="polite">${hint}</small>
     </div>
-    <button class="btn btn-primary" disabled=${!canSubmit} onClick=${() => { if (canSubmit) this.setState({ confirm: true, error: '' }); }}>
+    <button class="btn btn-primary" disabled=${!canSubmit} onClick=${onSubmit}>
       ${prev && allowChange ? 'บันทึกการแก้ไข' : 'ยืนยันโหวต'}
     </button>
   </div>

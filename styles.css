@@ -283,3 +283,10 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* Subtitle breaks between phrases, never mid-phrase. */
 .brand small span{white-space:nowrap}
+/* Section state: green check when complete, red only after pressing confirm with gaps. */
+.block{transition:border-color .2s,box-shadow .2s}
+.block.done{border-color:#A7D8BC}
+.block.missing{border-color:var(--err);box-shadow:0 0 0 1px var(--err)}
+.step-ok{display:inline-grid;place-items:center;width:20px;height:20px;margin-left:4px;border-radius:50%;background:var(--ok);color:#fff;vertical-align:2px}
+.step-need{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--err)}
+.block-head h2{display:flex;align-items:center;gap:4px;white-space:nowrap;min-width:0}
