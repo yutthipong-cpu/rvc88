@@ -784,10 +784,7 @@ class App extends Component {
     </dl>
     ${extrasOf(done).length > 0 && html`<p class="paid-note" style="margin:0">ฟรี 1 ตัว · ชำระเอง ${extrasOf(done).length} ตัว</p>`}
     <p class="hint">ต้องการแก้ไขภายหลัง เลือกชื่อของท่านแล้วใส่เบอร์ <b class="mono">${this.state.phone}</b></p>
-    <div class="sheet-actions">
-      <button class="btn btn-ghost" onClick=${() => this.resetForm()}>โหวตให้คนถัดไป</button>
-      <button class="btn btn-primary" onClick=${() => this.resetForm()}>เสร็จสิ้น</button>
-    </div>
+    <button class="btn btn-primary" style="width:100%" onClick=${() => this.resetForm()}>เสร็จสิ้น</button>
   </div>
 </div>`;
   }
