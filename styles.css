@@ -107,7 +107,11 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .shirt-tone{padding:0 10px;font-size:13px;line-height:1.4;color:var(--muted)}
 .tick{position:absolute;top:8px;left:8px;display:flex;align-items:center;gap:6px;padding:3px 10px 3px 6px;border-radius:99px;background:var(--navy);color:#fff;font-size:13px;font-weight:600}
 .tick::before{content:'';width:10px;height:5px;margin:-3px 0 0 2px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg)}
-.shirt .text-btn{align-self:stretch;text-align:left;margin:0;padding:8px 10px;border-top:1px solid var(--line);font-size:14px}
+/* Zoom button sits on the picture's bottom-right corner; the square area matches the 1:1 picture. */
+.shirt{position:relative}
+.zoom-area{position:absolute;left:0;right:0;top:0;aspect-ratio:1/1;pointer-events:none}
+.zoom{position:absolute;right:6px;bottom:6px;pointer-events:auto;display:flex;align-items:center;gap:4px;height:34px;padding:0 10px 0 8px;border:1px solid var(--line);border-radius:99px;background:rgba(255,255,255,.95);color:var(--navy);font-size:13px;font-weight:600;box-shadow:0 2px 8px -2px rgba(20,33,61,.35)}
+.zoom:hover{background:#fff;border-color:var(--navy)}
 
 /* Size tape */
 .tape{margin-top:16px;padding:0 4px;user-select:none}
@@ -188,7 +192,11 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .lb-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 8px;overflow:auto}
 .lb-img{position:relative}
 .lb-img img{max-width:min(1400px,100%);max-height:100%;object-fit:contain;border-radius:6px;background:#fff;transition:opacity .2s}
-.lb-img img.hidden{opacity:0;position:absolute}
+.lb-progress{width:min(240px,70vw);height:6px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
+.lb-progress i{display:block;height:100%;border-radius:99px;background:#fff;transition:width .15s}
+.lb-progress i.indeterminate{width:35%!important;animation:slide 1.1s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
+.lb-status small{font-size:12px;color:rgba(255,255,255,.6)}
 .lb-status{display:flex;flex-direction:column;align-items:center;gap:12px;font-size:15px;color:rgba(255,255,255,.85)}
 .spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}

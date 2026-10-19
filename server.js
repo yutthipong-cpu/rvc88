@@ -188,8 +188,9 @@ function serveStatic(req, res, url) {
   const file = path.join(ROOT, p);
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream' });
-    res.end(data);
+    // Content-Length lets the page show how far a large picture has loaded.
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Content-Length': data.length });
+    res.end(req.method === 'HEAD' ? undefined : data);
   });
 }
 

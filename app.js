@@ -32,6 +32,25 @@ const shirtsOf = v => [{ size: v.size }, ...extrasOf(v)];
 const shirtText = x => `ไซซ์ ${x.size}`;
 const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 let xlsxLoading = null;
+// Viewer pictures are fetched as a stream so the page can show how much has arrived;
+// finished pictures are kept as blob URLs so reopening them is instant.
+const imageCache = new Map();
+const lbSrc = lb => { const d = DESIGNS.find(x => x.id === lb.id); return lb.kind === 'chart' ? d.chart : d.board; };
+async function fetchWithProgress(src, onProgress, signal) {
+  const r = await fetch(src, { signal });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const total = Number(r.headers.get('content-length')) || 0;
+  if (!r.body || !r.body.getReader) return URL.createObjectURL(await r.blob());
+  const reader = r.body.getReader(), chunks = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value); loaded += value.length;
+    onProgress(loaded, total);
+  }
+  return URL.createObjectURL(new Blob(chunks, { type: r.headers.get('content-type') || 'image/jpeg' }));
+}
 const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, reject) => {
   const el = document.createElement('script');
   el.src = XLSX_URL;
@@ -71,6 +90,21 @@ class App extends Component {
     const locked = modal(this.state);
     if (locked !== modal(prev)) document.body.style.overflow = locked ? 'hidden' : '';
     if (this.state.askKey && !prev.askKey) { const el = document.getElementById('key'); if (el) el.focus(); }
+    this.loadLbImage();
+  }
+  // Starts loading the picture the viewer is showing, if it is not loaded or loading already.
+  loadLbImage() {
+    const lb = this.state.lightbox;
+    const src = lb ? lbSrc(lb) : null;
+    if (src === this._lbWant) return;
+    if (this._lbAbort) this._lbAbort.abort();
+    this._lbWant = src;
+    if (!src || imageCache.has(src)) return;
+    const ctl = this._lbAbort = new AbortController();
+    this.setState({ lbProg: { src, loaded: 0, total: 0 }, lbFailed: null });
+    fetchWithProgress(src, (loaded, total) => this.setState({ lbProg: { src, loaded, total } }), ctl.signal)
+      .then(url => { imageCache.set(src, url); this.setState({ lbProg: null }); })
+      .catch(e => { if (e.name !== 'AbortError') { this._lbWant = null; this.setState({ lbFailed: src }); } });
   }
 
   staffNames() {
@@ -467,7 +501,12 @@ class App extends Component {
             <span class="shirt-name">${d.label}</span>
             <span class="shirt-tone">${d.tone}</span>
           </button>
-          <button class="text-btn" onClick=${() => this.setState({ lightbox: { id: d.id, kind: 'board' } })}>ดูภาพละเอียด</button>
+          <div class="zoom-area">
+            <button class="zoom" aria-label=${`ดูภาพละเอียด ${d.label}`} onClick=${() => this.setState({ lightbox: { id: d.id, kind: 'board' } })}>
+              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l4.5 4.5M8.5 6v5M6 8.5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              ขยาย
+            </button>
+          </div>
         </div>`;
       })}
     </div>
@@ -707,11 +746,13 @@ class App extends Component {
     const lb = this.state.lightbox;
     const d = DESIGNS.find(x => x.id === lb.id), other = DESIGNS.find(x => x.id !== lb.id);
     const setKind = kind => this.setState(st => ({ lightbox: { ...st.lightbox, kind } }));
-    // The detail boards are large; show progress until the picture has arrived, and say so if it fails.
-    const src = lb.kind === 'chart' ? d.chart : d.board;
-    const status = this.state.lbDone === src ? 'done' : this.state.lbFailed === src ? 'failed' : 'loading';
-    const loaded = () => this.setState({ lbDone: src, lbFailed: null });
-    const retry = () => { this._lbRetry = (this._lbRetry || 0) + 1; this.setState({ lbFailed: null }); };
+    // The detail boards are large; show how much has arrived, and say so if it fails (see loadLbImage).
+    const src = lbSrc(lb);
+    const url = imageCache.get(src);
+    const status = url ? 'done' : this.state.lbFailed === src ? 'failed' : 'loading';
+    const prog = this.state.lbProg && this.state.lbProg.src === src ? this.state.lbProg : { loaded: 0, total: 0 };
+    const pct = prog.total ? Math.min(100, Math.round(prog.loaded / prog.total * 100)) : null;
+    const retry = () => { this._lbWant = null; this.setState({ lbFailed: null }); };
     return html`
 <div class="lb" role="dialog" aria-modal="true" aria-label=${d.label}>
   <div class="lb-top">
@@ -719,10 +760,16 @@ class App extends Component {
     <button class="lb-close" onClick=${() => this.setState({ lightbox: null })}>ปิด</button>
   </div>
   <div class="lb-img" aria-busy=${status === 'loading'}>
-    <img key=${src + (this._lbRetry || '')} class=${status === 'done' ? '' : 'hidden'} src=${src} alt=${`${d.label} ${lb.kind === 'chart' ? 'ตารางไซซ์' : 'ภาพรายละเอียด'}`}
-      ref=${el => { if (el && el.complete && el.naturalWidth && status !== 'done') loaded(); }}
-      onLoad=${loaded} onError=${() => this.setState({ lbFailed: src })} />
-    ${status === 'loading' && html`<div class="lb-status" role="status"><span class="spinner"></span>กำลังโหลดภาพ…</div>`}
+    ${url && html`<img key=${src} src=${url} alt=${`${d.label} ${lb.kind === 'chart' ? 'ตารางไซซ์' : 'ภาพรายละเอียด'}`} />`}
+    ${status === 'loading' && html`
+      <div class="lb-status" role="status">
+        <span class="spinner"></span>
+        <span>กำลังโหลดภาพ… <b class="mono">${pct != null ? pct + '%' : prog.loaded ? Math.round(prog.loaded / 1024) + ' KB' : ''}</b></span>
+        <div class="lb-progress" role="progressbar" aria-label="ความคืบหน้าการโหลดภาพ" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${pct != null ? pct : undefined}>
+          <i style="width:${pct != null ? pct : 0}%" class=${pct == null ? 'indeterminate' : ''}></i>
+        </div>
+        ${prog.total > 0 && html`<small class="mono">${(prog.loaded / 1048576).toFixed(2)} / ${(prog.total / 1048576).toFixed(2)} MB</small>`}
+      </div>`}
     ${status === 'failed' && html`<div class="lb-status" role="alert">โหลดภาพไม่สำเร็จ<button class="lb-other" onClick=${retry}>ลองอีกครั้ง</button></div>`}
   </div>
   <div class="lb-bottom">
