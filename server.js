@@ -5,7 +5,7 @@
 //   PORT               port to listen on (default 3000)
 //   DATA_DIR           where votes.json is kept (default ./data)
 //   ADMIN_KEY          password for the results page, downloads and clearing votes (no default: set it, or admin is off)
-//   VOTING_OPEN        "false" closes voting (default true)
+//   VOTING_OPEN        starting value of the open/close switch before the admin first sets it (default true)
 //   ALLOW_CHANGE_VOTE  "false" blocks editing a vote (default true)
 //   HIDE_RESULTS       "true" hides the per-design results (default false)
 //   SAMPLE_DATA        "true" shows generated sample votes on the results page (default false)
@@ -29,6 +29,7 @@ const CONFIG = {
 };
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+const DESIGN_IDS = ['1', '2', '3'];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
 const OTHER_DEPT = 'อื่นๆ';
 
@@ -51,14 +52,21 @@ function persist() {
   return writing;
 }
 
-// Settings the admin changes from the results page. resultsPublic: anyone can view results without the password.
+// Settings the admin changes from the results page.
+//   resultsPublic: anyone can view results without the password
+//   votingOpen:    voting accepts new votes and edits
+//   round:         the voting round in progress; earlier rounds are kept read-only in votes-round<N>.json
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
-let settings = { resultsPublic: false };
+let settings = { resultsPublic: false, votingOpen: CONFIG.votingOpen, round: 1 };
 try { settings = { ...settings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; } catch (e) { if (e.code !== 'ENOENT') throw e; }
 function saveSettings() {
   return fs.promises.writeFile(SETTINGS_FILE + '.tmp', JSON.stringify(settings))
     .then(() => fs.promises.rename(SETTINGS_FILE + '.tmp', SETTINGS_FILE));
 }
+
+const archiveFile = n => path.join(DATA_DIR, `votes-round${n}.json`);
+const archivedRounds = () => fs.readdirSync(DATA_DIR)
+  .map(f => /^votes-round(\d+)\.json$/.exec(f)).filter(Boolean).map(m => Number(m[1])).sort((a, b) => a - b);
 
 const publicVote = ({ phone, note, ...v }) => v;
 
@@ -96,15 +104,36 @@ function readBody(req) {
 }
 
 async function api(req, res, url) {
-  if (url.pathname === '/api/config' && req.method === 'GET') return send(res, 200, { ...CONFIG, resultsPublic: settings.resultsPublic });
+  if (url.pathname === '/api/config' && req.method === 'GET') {
+    return send(res, 200, { ...CONFIG, votingOpen: settings.votingOpen, resultsPublic: settings.resultsPublic, round: settings.round, pastRounds: archivedRounds() });
+  }
 
   if (url.pathname === '/api/settings' && req.method === 'PUT') {
     if (!isAdmin(req)) return send(res, 401, { error: 'รหัสไม่ถูกต้อง' });
     let b;
     try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
     if (typeof b.resultsPublic === 'boolean') settings.resultsPublic = b.resultsPublic;
+    if (typeof b.votingOpen === 'boolean') settings.votingOpen = b.votingOpen;
     await saveSettings();
     return send(res, 200, settings);
+  }
+
+  // Start a new round: the current votes are kept read-only, voting starts empty and closed.
+  if (url.pathname === '/api/rounds/new' && req.method === 'POST') {
+    if (!isAdmin(req)) return send(res, 401, { error: 'รหัสไม่ถูกต้อง' });
+    // The caller names the round being closed, so a repeated request cannot skip a round.
+    let b;
+    try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
+    if (Number(b.from) !== settings.round) return send(res, 409, { error: `รอบปัจจุบันคือรอบที่ ${settings.round}` });
+    const file = archiveFile(settings.round);
+    if (fs.existsSync(file)) return send(res, 409, { error: `มีข้อมูลรอบที่ ${settings.round} เก็บไว้แล้ว` });
+    await writing;
+    await fs.promises.writeFile(file, JSON.stringify(votes, null, 1));
+    votes = [];
+    await persist();
+    settings = { ...settings, round: settings.round + 1, votingOpen: false, resultsPublic: false };
+    await saveSettings();
+    return send(res, 200, { round: settings.round, archived: archivedRounds() });
   }
 
   // Who has voted (names only), for the turnout count and the "โหวตแล้ว" tags.
@@ -124,6 +153,13 @@ async function api(req, res, url) {
   // Results need the admin password unless the admin has opened them to everyone.
   // Phone numbers and notes only ever go to the admin.
   if (url.pathname === '/api/votes' && req.method === 'GET') {
+    // An earlier round's votes are admin-only.
+    const round = Number(url.searchParams.get('round')) || settings.round;
+    if (round !== settings.round) {
+      if (!isAdmin(req)) return send(res, 401, { error: 'รหัสไม่ถูกต้อง' });
+      try { return send(res, 200, JSON.parse(fs.readFileSync(archiveFile(round), 'utf8'))); }
+      catch (e) { return send(res, 404, { error: 'ไม่พบข้อมูลรอบนี้' }); }
+    }
     if (isAdmin(req)) return send(res, 200, votes);
     if (settings.resultsPublic) return send(res, 200, votes.map(publicVote));
     return send(res, 401, { error: 'รหัสไม่ถูกต้อง' });
@@ -132,13 +168,13 @@ async function api(req, res, url) {
   if (url.pathname === '/api/votes' && req.method === 'POST') {
     let b;
     try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
-    if (!CONFIG.votingOpen) return send(res, 403, { error: 'ปิดรับการโหวตแล้ว' });
+    if (!settings.votingOpen) return send(res, 403, { error: 'ระบบโหวตยังไม่เปิด' });
     // Names not on the staff list are allowed and grouped under "อื่นๆ".
     const name = String(b.name || '').replace(/\s+/g, ' ').trim();
     const known = staffByName.has(name);
     // A first name and a surname, letters only.
     if (!known && !(/^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(name) && /\S\s+\S/.test(name))) return send(res, 400, { error: 'กรอกชื่อและนามสกุลให้ถูกต้อง' });
-    if (!['1', '2'].includes(b.design)) return send(res, 400, { error: 'กรุณาเลือกแบบเสื้อ' });
+    if (!DESIGN_IDS.includes(b.design)) return send(res, 400, { error: 'กรุณาเลือกแบบเสื้อ' });
     if (!SIZES.includes(b.size)) return send(res, 400, { error: 'กรุณาเลือกไซซ์' });
     // Shirts after the first are paid by the voter; each has its own size (one cut for everyone).
     // The design is the vote, so it is chosen once and does not apply per shirt.

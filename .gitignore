@@ -12,3 +12,4 @@ node_modules/
 # Local design previews
 font-preview.html
 logo-preview.html
+data/votes-round*.json

@@ -1,7 +1,7 @@
 import { html, render, Component } from 'https://unpkg.com/htm@3.1.1/preact/standalone.module.js';
 
 // Settings come from the server (see server.js); these defaults apply until /api/config loads.
-const DEFAULT_CONFIG = { votingOpen: true, allowChangeVote: true, hideResults: false, sampleData: false, adminEnabled: false };
+const DEFAULT_CONFIG = { round: 1, pastRounds: [], votingOpen: true, allowChangeVote: true, hideResults: false, sampleData: false, adminEnabled: false };
 const POLL_MS = 10000;
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
@@ -9,8 +9,13 @@ const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 const CHART = { chest: [34, 36, 38, 40, 42, 44, 46, 48], len: [24, 25, 26, 27, 28, 29, 30, 31] };
 const DESIGNS = [
   { id: '1', label: 'แบบที่ 1', tone: 'น้ำเงินเข้ม ชายเสื้อลายไทยสีทอง', front: 'assets/d2-front.png', back: 'assets/d2-back.png', board: 'assets/d2-board.jpg', chart: 'assets/d2-size.jpg' },
-  { id: '2', label: 'แบบที่ 2', tone: 'ฟ้า–ขาว เส้นทองพลิ้ว', front: 'assets/d1-front.png', back: 'assets/d1-back.png', board: 'assets/d1-board.jpg', chart: 'assets/d1-size.jpg' }
+  { id: '2', label: 'แบบที่ 2', tone: 'ฟ้า–ขาว เส้นทองพลิ้ว', front: 'assets/d1-front.png', back: 'assets/d1-back.png', board: 'assets/d1-board.jpg', chart: 'assets/d1-size.jpg' },
+  // No size chart picture yet for design 3; the viewer and the size button fall back to the others.
+  { id: '3', label: 'แบบที่ 3', tone: 'ขาว–ฟ้า เลข 88 ตัวใหญ่', front: 'assets/d3-front.webp', back: 'assets/d3-back.webp', board: 'assets/d3-board.jpg', chart: null }
 ];
+// Designs offered in each round (later rounds offer all of them).
+const ROUND_DESIGNS = { 1: ['1', '2'] };
+const designsFor = round => DESIGNS.filter(d => !ROUND_DESIGNS[round] || ROUND_DESIGNS[round].includes(d.id));
 const ORDER = ['ฝ่ายบริหาร', 'ผู้ช่วยศาสตราจารย์', 'แผนกวิชาสามัญสัมพันธ์', 'แผนกวิชาการบัญชี', 'แผนกวิชาการตลาด', 'แผนกวิชาโลจิสติกส์', 'แผนกวิชาเทคโนโลยีธุรกิจดิจิทัล', 'แผนกวิชาเทคโนโลยีสารสนเทศ', 'แผนกวิชาวิจิตรศิลป์', 'แผนกวิชาออกแบบ', 'แผนกวิชาคอมพิวเตอร์กราฟิก', 'แผนกวิชาแฟชั่นและสิ่งทอ', 'แผนกวิชาคหกรรมศาสตร์', 'แผนกวิชาอาหารและโภชนาการ', 'แผนกวิชาการโรงแรม', 'แผนกวิชาการท่องเที่ยว', 'ลูกจ้างชั่วคราว', 'นักการ', 'แม่บ้าน', 'พนักงานขับรถ', 'ยามรักษาการ'];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
 // The size tape spans 16 inches: one inch either side of the smallest and largest chest.
@@ -35,7 +40,7 @@ let xlsxLoading = null;
 // Viewer pictures are fetched as a stream so the page can show how much has arrived;
 // finished pictures are kept as blob URLs so reopening them is instant.
 const imageCache = new Map();
-const lbSrc = lb => { const d = DESIGNS.find(x => x.id === lb.id); return lb.kind === 'chart' ? d.chart : d.board; };
+const lbSrc = lb => { const d = DESIGNS.find(x => x.id === lb.id); return lb.kind === 'chart' && d.chart ? d.chart : d.board; };
 async function fetchWithProgress(src, onProgress, signal) {
   const r = await fetch(src, { signal });
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -60,7 +65,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, pastHero: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, pastHero: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', viewRound: null, pastVotes: [], cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -176,15 +181,25 @@ class App extends Component {
     else this.askForKey();
   }
   askForKey() { this.setState({ askKey: true, done: null, keyInput: '', keyError: '' }); }
-  async setResultsPublic(on) {
+  // Admin switches: votingOpen (accept votes) and resultsPublic (anyone can see results).
+  async setSetting(key, on) {
     this._cfgSeq = (this._cfgSeq || 0) + 1;
     const r = await fetch('api/settings', {
       method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-key': this.state.adminKey },
-      body: JSON.stringify({ resultsPublic: on })
+      body: JSON.stringify({ [key]: on })
     });
     if (!r.ok) { this.setState({ adminMsg: 'เปลี่ยนการตั้งค่าไม่สำเร็จ ลองอีกครั้ง' }); return; }
-    this.setState(st => ({ cfg: { ...st.cfg, resultsPublic: on } }));
+    this.setState(st => ({ cfg: { ...st.cfg, [key]: on } }));
   }
+  // An earlier round's results (admin only, read-only).
+  async viewRound(round) {
+    if (!round || round === this.state.cfg.round) { this.setState({ viewRound: null, pastVotes: [] }); return; }
+    const r = await fetch('api/votes?round=' + round, { headers: { 'x-admin-key': this.state.adminKey }, cache: 'no-store' });
+    if (!r.ok) { this.setState({ adminMsg: 'โหลดข้อมูลรอบที่ ' + round + ' ไม่สำเร็จ' }); return; }
+    this.setState({ viewRound: round, pastVotes: await r.json(), mode: 'voted' });
+  }
+  resultVotes() { return this.state.viewRound ? this.state.pastVotes : this.shownVotes(); }
+  resultRound() { return this.state.viewRound || this.state.cfg.round; }
 
   sample() {
     const st = this.state.staff;
@@ -252,12 +267,12 @@ class App extends Component {
   }
   setTab(tab) {
     // The password only lasts while the results page is open; leaving it locks the admin view again.
-    const leaving = tab !== 'results' ? { adminKey: '', votes: [] } : {};
+    const leaving = tab !== 'results' ? { adminKey: '', votes: [], viewRound: null, pastVotes: [] } : {};
     this.setState({ tab, done: null, ...leaving }, () => this.refresh());
     window.scrollTo(0, 0);
   }
 
-  sortedVotes() { return this.shownVotes().slice().sort((a, b) => a.time - b.time); }
+  sortedVotes() { return this.resultVotes().slice().sort((a, b) => a.time - b.time); }
   exportRows() {
     const head = ['ลำดับ', 'ชื่อ-สกุล', 'แผนก/ฝ่าย', 'แบบที่โหวต', 'ไซซ์', 'จำนวนรวม (ตัว)', 'ชำระเอง (ตัว)', 'เสื้อตัวที่ชำระเอง', 'เบอร์โทร', 'หมายเหตุ', 'เวลาโหวต'];
     const rows = this.sortedVotes().map((v, i) => {
@@ -270,7 +285,7 @@ class App extends Component {
   async exportXlsx() {
     let XLSX;
     try { XLSX = await loadXlsx(); } catch (e) { this.setState({ adminMsg: 'โหลดตัวสร้างไฟล์ Excel ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง หรือกดปุ่ม CSV แทน' }); return; }
-    const votes = this.shownVotes();
+    const votes = this.resultVotes();
     const wb = XLSX.utils.book_new();
     const list = XLSX.utils.aoa_to_sheet(this.exportRows());
     list['!cols'] = [6, 28, 30, 10, 6, 12, 12, 40, 14, 30, 18].map(w => ({ wch: w }));
@@ -288,14 +303,14 @@ class App extends Component {
     const sheet2 = XLSX.utils.aoa_to_sheet(order);
     sheet2['!cols'] = [{ wch: 12 }, ...SIZES.map(() => ({ wch: 6 })), { wch: 6 }];
     XLSX.utils.book_append_sheet(wb, sheet2, 'สรุปจำนวนสั่งผลิต');
-    XLSX.writeFile(wb, 'ผลโหวตแบบเสื้อ-88ปี.xlsx');
+    XLSX.writeFile(wb, `ผลโหวตแบบเสื้อ-88ปี-รอบ${this.resultRound()}.xlsx`);
   }
   exportCsv() {
     const esc = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
     // Keep phone numbers as text so Excel does not drop the leading zero.
     const lines = this.exportRows().map((r, i) => r.map((x, j) => (i > 0 && j === 8 && x ? '="' + x + '"' : x)).map(esc).join(','));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ผลโหวตแบบเสื้อ-88ปี.csv';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ผลโหวตแบบเสื้อ-88ปี-รอบ${this.resultRound()}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
@@ -330,7 +345,7 @@ class App extends Component {
     </div>
   </header>
 
-  ${onVote || !this.canSeeResults() ? this.renderVote(s.names.length, total) : this.renderResults(this.shownVotes(), total)}
+  ${onVote || !this.canSeeResults() ? this.renderVote(s.names.length, total) : this.renderResults(this.resultVotes(), total)}
 
   <footer class="foot"><div class="wrap ${onVote ? '' : 'wide'}">วิทยาลัยอาชีวศึกษาร้อยเอ็ด · สร้างคน สร้างอาชีพ สร้างอนาคต</div></footer>
 
@@ -448,9 +463,39 @@ class App extends Component {
   </section>`;
   }
 
+  renderHero(total, isOpen) {
+    const s = this.state;
+    return html`
+<section class="hero" id="hero">
+  <div class="hero-top">
+    <span>วันสถาปนาครบรอบ 88 ปี · สถานศึกษารางวัลพระราชทาน ปีการศึกษา 2568</span>
+    <button class="results-btn on-light" aria-label="ดูผลโหวต" title="ดูผลโหวต" onClick=${() => this.goResults()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h16M7 16v-4M12 16V7M17 16v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="hero-body">
+    <img class="hero-logo" src="assets/logo-88.webp" width="640" height="424" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
+    ${s.cfg.round > 1 && html`<span class="round-tag">รอบที่ ${s.cfg.round}</span>`}
+    <h1>โหวตเลือกเสื้อที่ระลึก</h1>
+    ${isOpen ? html`
+      <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
+      <p class="count">${this.countText(s.names, total)}</p>
+      <button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>` : html`
+      <div class="closed-card" role="status">
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <b>ระบบโหวตยังไม่เปิด</b>
+        <p>ผู้ดูแลจะเปิดให้โหวตเร็ว ๆ นี้ กลับมาที่หน้านี้อีกครั้งภายหลัง</p>
+      </div>`}
+  </div>
+  ${isOpen && html`<button class="hero-down" aria-label="เลื่อนลงไปกรอกข้อมูล" onClick=${() => this.scrollToForm()}>
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>`}
+</section>`;
+  }
+
   renderVote(voted, total) {
     const s = this.state;
     const allowChange = s.cfg.allowChangeVote, isOpen = s.cfg.votingOpen;
+    // While voting is closed the page is only the banner, saying so.
+    if (!isOpen) return this.renderHero(total, false);
     const myVoted = new Set(s.names);
     const prev = s.person && s.prevVote && s.prevVote.name === s.person.name ? s.prevVote : null;
     // Picked a name that already voted, and has not yet unlocked it with their phone number.
@@ -488,28 +533,12 @@ class App extends Component {
     const hintClass = s.error || locked ? 'err' : allOk ? 'ok' : s.showMissing ? 'err' : '';
     const summary = ([s.design && dLabel(s.design), s.size && `ไซซ์ ${s.size}`].filter(Boolean).join(' · ') || 'ยังไม่ได้เลือกเสื้อ')
       + (s.extras.length ? ` + เพิ่ม ${s.extras.length} ตัว` : '');
-    const chartFor = s.design || '1';
+    const chartFor = (DESIGNS.find(d => d.id === s.design && d.chart) || DESIGNS[0]).id;
 
     return html`
-<section class="hero" id="hero">
-  <div class="hero-top">
-    <span>วันสถาปนาครบรอบ 88 ปี · สถานศึกษารางวัลพระราชทาน ปีการศึกษา 2568</span>
-    <button class="results-btn on-light" aria-label="ดูผลโหวต" title="ดูผลโหวต" onClick=${() => this.goResults()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h16M7 16v-4M12 16V7M17 16v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-  </div>
-  <div class="hero-body">
-    <img class="hero-logo" src="assets/logo-88.webp" width="640" height="424" alt="ตราสัญลักษณ์ 88 ปี วิทยาลัยอาชีวศึกษาร้อยเอ็ด" />
-    <h1>โหวตเลือกเสื้อที่ระลึก</h1>
-    <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
-    <p class="count">${this.countText(s.names, total)}</p>
-    <button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>
-  </div>
-  <button class="hero-down" aria-label="เลื่อนลงไปกรอกข้อมูล" onClick=${() => this.scrollToForm()}>
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </button>
-</section>
+${this.renderHero(total, isOpen)}
 
 <main class="wrap form">
-  ${!isOpen && html`<div class="notice closed">ปิดรับโหวตแล้ว ขอบคุณทุกท่านที่ร่วมเลือก</div>`}
 
   <section class="block ${stepClass('step-name')}" id="step-name">
     <div class="block-head"><h2>ชื่อและเบอร์โทร ${step('step-name').ok && stepMark('step-name')}</h2></div>
@@ -617,8 +646,10 @@ class App extends Component {
     const s = this.state;
     const voted = votes.length;
     const hide = s.cfg.hideResults, sampleOn = s.cfg.sampleData;
+    const round = this.resultRound(), designs = designsFor(round);
+    const rounds = [...(s.cfg.pastRounds || []), s.cfg.round];
 
-    const counts = DESIGNS.map(d => votes.filter(v => v.design === d.id).length);
+    const counts = designs.map(d => votes.filter(v => v.design === d.id).length);
     const maxC = Math.max(...counts), tie = counts.every(c => c === counts[0]);
 
     // Shirt counts include every shirt ordered.
@@ -639,22 +670,35 @@ class App extends Component {
       ? votes.slice().sort((a, b) => b.time - a.time).filter(v => match(v.name, v.dept))
       : pending.filter(p => match(p.name, p.dept));
     const emptyText = s.rq ? 'ไม่พบชื่อหรือแผนกนี้' : (s.mode === 'voted' ? 'ยังไม่มีใครโหวต' : 'ทุกคนโหวตครบแล้ว');
-    const canClear = s.mode === 'voted' && !sampleOn && s.votes.length > 0;
+    const canClear = s.mode === 'voted' && !sampleOn && !s.viewRound && s.votes.length > 0;
 
     return html`
 <main class="wrap wide results">
-  <h1 class="page-title">ผลโหวตแบบเสื้อ</h1>
+  <h1 class="page-title">ผลโหวตแบบเสื้อ${rounds.length > 1 ? ` รอบที่ ${round}` : ''}</h1>
+  ${s.adminKey && rounds.length > 1 && html`
+    <div class="seg" role="group" aria-label="เลือกรอบ">
+      ${rounds.map(r => html`<button aria-pressed=${r === round} onClick=${() => this.viewRound(r)}>รอบที่ ${r}${r === s.cfg.round ? ' (ปัจจุบัน)' : ''}</button>`)}
+    </div>`}
+  ${s.viewRound && html`<div class="notice info">ข้อมูลรอบที่ ${round} เก็บไว้ดูอย่างเดียว แก้ไขไม่ได้</div>`}
   <p class="count">${this.countText(votes.map(v => v.name), total)}</p>
   ${s.adminMsg && html`<div class="notice info admin-msg" role="status"><span>${s.adminMsg}</span><button class="text-btn" onClick=${() => this.setState({ adminMsg: '' })}>ปิด</button></div>`}
 
-  ${s.adminKey && html`
+  ${s.adminKey && !s.viewRound && html`
+    <div class="panel switch-row">
+      <div>
+        <b id="open-label">เปิดรับโหวต รอบที่ ${s.cfg.round}</b>
+        <small>${s.cfg.votingOpen ? 'เปิดอยู่: บุคลากรโหวตและแก้ไขได้' : 'ปิดอยู่: หน้าโหวตขึ้นว่าระบบโหวตยังไม่เปิด'}</small>
+      </div>
+      <button class="switch" role="switch" aria-checked=${!!s.cfg.votingOpen} aria-labelledby="open-label"
+        onClick=${() => this.setSetting('votingOpen', !s.cfg.votingOpen)}><span></span></button>
+    </div>
     <div class="panel switch-row">
       <div>
         <b id="pub-label">เปิดผลให้ทุกคนดู</b>
         <small>${s.cfg.resultsPublic ? 'เปิดผลไว้: ทุกคนกดดูผลได้โดยไม่ต้องใส่รหัส' : 'ล็อกดูผล: ต้องใส่รหัสถึงจะดูผลได้'}</small>
       </div>
       <button class="switch" role="switch" aria-checked=${!!s.cfg.resultsPublic} aria-labelledby="pub-label"
-        onClick=${() => this.setResultsPublic(!s.cfg.resultsPublic)}><span></span></button>
+        onClick=${() => this.setSetting('resultsPublic', !s.cfg.resultsPublic)}><span></span></button>
     </div>`}
 
   ${sampleOn && html`<div class="notice sample">นี่คือข้อมูลตัวอย่าง ปิดได้ด้วย SAMPLE_DATA=false บนเซิร์ฟเวอร์</div>`}
@@ -662,7 +706,7 @@ class App extends Component {
   ${hide ? html`
     <div class="panel"><h2>ประกาศผลหลังปิดรับโหวต</h2><p class="hint">ระหว่างนี้ดูได้เฉพาะจำนวนคนที่โหวตแล้ว</p></div>` : html`
     <div class="tally">
-      ${DESIGNS.map((d, i) => {
+      ${designs.map((d, i) => {
         const lead = voted > 0 && !tie && counts[i] === maxC;
         const pct = voted ? counts[i] / voted * 100 : 0;
         return html`
@@ -791,7 +835,8 @@ class App extends Component {
 
   renderLightbox() {
     const lb = this.state.lightbox;
-    const d = DESIGNS.find(x => x.id === lb.id), other = DESIGNS.find(x => x.id !== lb.id);
+    // "ดูแบบถัดไป" steps through the designs in order.
+    const idx = DESIGNS.findIndex(x => x.id === lb.id), d = DESIGNS[idx], other = DESIGNS[(idx + 1) % DESIGNS.length];
     const setKind = kind => this.setState(st => ({ lightbox: { ...st.lightbox, kind } }));
     // The detail boards are large; show how much has arrived, and say so if it fails (see loadLbImage).
     const src = lbSrc(lb);
@@ -823,10 +868,10 @@ class App extends Component {
     ${status === 'failed' && html`<div class="lb-status" role="alert">โหลดภาพไม่สำเร็จ<button class="lb-other" onClick=${retry}>ลองอีกครั้ง</button></div>`}
   </div>
   <div class="lb-bottom">
-    <div class="seg">
+    ${d.chart && html`<div class="seg">
       <button aria-pressed=${lb.kind === 'board'} onClick=${() => setKind('board')}>ภาพรายละเอียด</button>
       <button aria-pressed=${lb.kind === 'chart'} onClick=${() => setKind('chart')}>ตารางไซซ์</button>
-    </div>
+    </div>`}
     <button class="lb-other" onClick=${() => this.setState(st => ({ lightbox: { ...st.lightbox, id: other.id } }))}>ดู${other.label}</button>
   </div>
 </div>`;

@@ -3,4 +3,5 @@
 .env
 node_modules
 data/votes.json*
+data/votes-round*.json
 data/settings.json*
