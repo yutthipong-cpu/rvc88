@@ -30,6 +30,18 @@ const validPhone = s => /^\d{9,10}$/.test(digits(s));
 // Same rule as the server for names that are not on the staff list.
 const OTHER_DEPT = 'อื่นๆ';
 const validName = s => /^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(s) && /\S\s+\S/.test(s);
+// Smooth scrollIntoView does nothing in some in-app browsers; window.scrollTo works everywhere.
+// 'start' leaves room for the fixed header.
+function scrollToEl(el, where) {
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const top = where === 'center' ? r.top + window.scrollY - (window.innerHeight - r.height) / 2 : r.top + window.scrollY - 80;
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+}
+// The last vote made on this device, so the banner can say it is done. Browser storage may be blocked.
+const MINE_KEY = 'rvc88-my-vote';
+const readMine = () => { try { return JSON.parse(localStorage.getItem(MINE_KEY) || 'null'); } catch (e) { return null; } };
+const writeMine = v => { try { if (v) localStorage.setItem(MINE_KEY, JSON.stringify(v)); else localStorage.removeItem(MINE_KEY); } catch (e) {} };
 // Every shirt in a vote: the first (free) then the paid extras. Shirts have a size only;
 // the design is the vote. Older votes stored only a quantity, so their extras repeat the first shirt.
 const extrasOf = v => v.extras || Array.from({ length: Math.max(0, (v.qty || 1) - 1) }, () => ({ size: v.size }));
@@ -65,7 +77,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, pastHero: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', viewRound: null, pastVotes: [], cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, pastHero: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', viewRound: null, pastVotes: [], cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], namesLoaded: false, mine: readMine(), prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -101,10 +113,7 @@ class App extends Component {
     window.removeEventListener('keydown', this._onKey);
     window.removeEventListener('scroll', this._onScroll);
   }
-  scrollToForm() {
-    const el = document.getElementById('step-name');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  scrollToForm() { scrollToEl(document.getElementById('step-name'), 'start'); }
   componentDidUpdate(_, prev) {
     // Lock page scroll behind the lightbox, the done sheet and the password popup.
     const modal = st => !!(st.lightbox || st.done || st.askKey || st.confirm || st.confirmClear);
@@ -140,7 +149,7 @@ class App extends Component {
   }
   canSeeResults() { return !!(this.state.adminKey || this.state.cfg.resultsPublic); }
   refresh() {
-    fetch('api/summary', { cache: 'no-store' }).then(r => r.json()).then(b => this.setState({ names: b.names })).catch(() => {});
+    fetch('api/summary', { cache: 'no-store' }).then(r => r.json()).then(b => this.setState({ names: b.names, namesLoaded: true })).catch(() => {});
     // Config carries the "results open to everyone" switch, so re-read it as well.
     this.loadConfig();
     if (this.state.tab === 'results' && this.canSeeResults()) this.loadVotes(this.state.adminKey);
@@ -256,7 +265,9 @@ class App extends Component {
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'บันทึกไม่สำเร็จ');
-      this.setState(st => ({ saving: false, confirm: false, done: body, prevVote: body, names: st.names.includes(body.name) ? st.names : st.names.concat(body.name) }));
+      const mine = { round: s.cfg.round, name: body.name, design: body.design, size: body.size, extras: (body.extras || []).length, time: body.time };
+      writeMine(mine);
+      this.setState(st => ({ saving: false, confirm: false, done: body, prevVote: body, mine, names: st.names.includes(body.name) ? st.names : st.names.concat(body.name) }));
     } catch (e) {
       this.setState({ saving: false, error: e.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองกดอีกครั้ง' : e.message });
     }
@@ -463,8 +474,33 @@ class App extends Component {
   </section>`;
   }
 
+  // The vote made on this device in the current round, if it still counts.
+  myVote() {
+    const s = this.state, m = s.mine;
+    if (!m || m.round !== s.cfg.round) return null;
+    return !s.namesLoaded || s.names.includes(m.name) ? m : null;
+  }
+  forgetMyVote() { writeMine(null); this.setState({ mine: null }); }
+  // Opens the form on this person's name so they can unlock their vote with their phone number.
+  editMyVote(m) {
+    const p = this.state.staff.find(x => x.name === m.name) || { name: m.name, dept: OTHER_DEPT };
+    this.pick(p);
+    // Wait for the form to redraw with the name picked, then scroll to it.
+    requestAnimationFrame(() => requestAnimationFrame(() => this.scrollToForm()));
+  }
+
   renderHero(total, isOpen) {
     const s = this.state;
+    const mine = this.myVote();
+    const votedCard = mine && html`
+      <div class="voted-card" role="status">
+        <span class="voted-icon"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <div>
+          <b>โหวตเรียบร้อยแล้ว</b>
+          <span>${mine.name} · ${dLabel(mine.design)} · ไซซ์ ${mine.size}${mine.extras ? ` + เพิ่ม ${mine.extras} ตัว` : ''}</span>
+          <button class="text-btn" onClick=${() => this.forgetMyVote()}>ไม่ใช่ท่าน? ซ่อน</button>
+        </div>
+      </div>`;
     return html`
 <section class="hero" id="hero">
   <div class="hero-top">
@@ -478,7 +514,11 @@ class App extends Component {
     ${isOpen ? html`
       <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
       <p class="count">${this.countText(s.names, total)}</p>
-      <button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>` : html`
+      ${votedCard}
+      ${mine
+        ? html`<button class="btn btn-ghost hero-cta" onClick=${() => this.editMyVote(mine)}>แก้ไขโหวต</button>`
+        : html`<button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>`}` : html`
+      ${votedCard}
       <div class="closed-card" role="status">
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
         <b>ระบบโหวตยังไม่เปิด</b>
@@ -522,7 +562,7 @@ class App extends Component {
         this.setState({ showMissing: true });
         const first = steps.find(x => !x.ok);
         const el = first && document.getElementById(first.id);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollToEl(el, 'center');
         return;
       }
       this.setState({ confirm: true, error: '' });

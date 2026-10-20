@@ -314,3 +314,11 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .shirt:last-child:nth-child(odd){grid-column:1/-1;justify-self:center;width:calc(50% - 5px)}
 @media (min-width:600px){.shirts{grid-template-columns:repeat(3,1fr)}.shirt:last-child:nth-child(odd){grid-column:auto;width:auto}}
 .results .seg{align-self:flex-start;flex-wrap:wrap}
+/* Banner note that this device's vote is saved */
+.voted-card{margin-top:14px;width:min(340px,100%);display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;background:#EAF6EF;border:1px solid #A7D8BC;text-align:left}
+.voted-icon{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ok);color:#fff}
+.voted-card div{min-width:0;line-height:1.45}
+.voted-card b{display:block;font-size:16px;color:#1B5E3A}
+.voted-card span{display:block;font-size:14px;color:var(--ink)}
+.voted-card .text-btn{font-size:13px;font-weight:400;color:var(--muted);padding:2px 0 0}
+.btn.hero-cta.btn-ghost{background:#fff}
