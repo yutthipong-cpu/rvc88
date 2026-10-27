@@ -29,7 +29,9 @@ const CONFIG = {
 };
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
-const DESIGN_IDS = ['1', '2', '3'];
+// Designs offered in each round (same as ROUND_DESIGNS in app.js); a later round offers the last listed set.
+const ROUND_DESIGN_IDS = { 1: ['1', '2'], 2: ['4', '5'] };
+const designIds = round => ROUND_DESIGN_IDS[round] || ROUND_DESIGN_IDS[Math.max(...Object.keys(ROUND_DESIGN_IDS).map(Number))];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
 const OTHER_DEPT = 'อื่นๆ';
 
@@ -174,7 +176,7 @@ async function api(req, res, url) {
     const known = staffByName.has(name);
     // A first name and a surname, letters only.
     if (!known && !(/^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(name) && /\S\s+\S/.test(name))) return send(res, 400, { error: 'กรอกชื่อและนามสกุลให้ถูกต้อง' });
-    if (!DESIGN_IDS.includes(b.design)) return send(res, 400, { error: 'กรุณาเลือกแบบเสื้อ' });
+    if (!designIds(settings.round).includes(b.design)) return send(res, 400, { error: 'กรุณาเลือกแบบเสื้อ' });
     if (!SIZES.includes(b.size)) return send(res, 400, { error: 'กรุณาเลือกไซซ์' });
     // Shirts after the first are paid by the voter; each has its own size (one cut for everyone).
     // The design is the vote, so it is chosen once and does not apply per shirt.

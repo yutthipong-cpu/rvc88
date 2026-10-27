@@ -10,12 +10,16 @@ const CHART = { chest: [34, 36, 38, 40, 42, 44, 46, 48], len: [24, 25, 26, 27, 2
 const DESIGNS = [
   { id: '1', label: 'แบบที่ 1', tone: 'น้ำเงินเข้ม ชายเสื้อลายไทยสีทอง', front: 'assets/d2-front.png', back: 'assets/d2-back.png', board: 'assets/d2-board.jpg', chart: 'assets/d2-size.jpg' },
   { id: '2', label: 'แบบที่ 2', tone: 'ฟ้า–ขาว เส้นทองพลิ้ว', front: 'assets/d1-front.png', back: 'assets/d1-back.png', board: 'assets/d1-board.jpg', chart: 'assets/d1-size.jpg' },
-  // No size chart picture yet for design 3; the viewer and the size button fall back to the others.
-  { id: '3', label: 'แบบที่ 3', tone: 'ขาว–ฟ้า เลข 88 ตัวใหญ่', front: 'assets/d3-front.webp', back: 'assets/d3-back.webp', board: 'assets/d3-board.jpg', chart: null }
+  // Round 2 designs. Numbered again from 1 because each round is voted on by itself.
+  { id: '4', label: 'แบบที่ 1', tone: 'ขาว ชายน้ำเงินลายไทย เส้นทอง มีกระเป๋า', front: 'assets/d4-front.webp', back: 'assets/d4-back.webp', board: 'assets/d4-board.jpg', chart: 'assets/d4-size.jpg' },
+  { id: '5', label: 'แบบที่ 2', tone: 'ขาวไล่ฟ้า เลข 88 R-Cheewa มีกระเป๋า', front: 'assets/d5-front.webp', back: 'assets/d5-back.webp', board: 'assets/d5-board.jpg', chart: 'assets/d5-size.jpg' }
 ];
-// Designs offered in each round (later rounds offer all of them).
-const ROUND_DESIGNS = { 1: ['1', '2'] };
-const designsFor = round => DESIGNS.filter(d => !ROUND_DESIGNS[round] || ROUND_DESIGNS[round].includes(d.id));
+// Designs offered in each round; a later round not listed here offers the last listed set.
+const ROUND_DESIGNS = { 1: ['1', '2'], 2: ['4', '5'] };
+const LAST_ROUND = Math.max(...Object.keys(ROUND_DESIGNS).map(Number));
+const designsFor = round => DESIGNS.filter(d => (ROUND_DESIGNS[round] || ROUND_DESIGNS[LAST_ROUND]).includes(d.id));
+// A vote's design only counts in the form if this round offers it.
+const offered = (round, id) => designsFor(round).some(d => d.id === id) ? id : null;
 const ORDER = ['ฝ่ายบริหาร', 'ผู้ช่วยศาสตราจารย์', 'แผนกวิชาสามัญสัมพันธ์', 'แผนกวิชาการบัญชี', 'แผนกวิชาการตลาด', 'แผนกวิชาโลจิสติกส์', 'แผนกวิชาเทคโนโลยีธุรกิจดิจิทัล', 'แผนกวิชาเทคโนโลยีสารสนเทศ', 'แผนกวิชาวิจิตรศิลป์', 'แผนกวิชาออกแบบ', 'แผนกวิชาคอมพิวเตอร์กราฟิก', 'แผนกวิชาแฟชั่นและสิ่งทอ', 'แผนกวิชาคหกรรมศาสตร์', 'แผนกวิชาอาหารและโภชนาการ', 'แผนกวิชาการโรงแรม', 'แผนกวิชาการท่องเที่ยว', 'ลูกจ้างชั่วคราว', 'นักการ', 'แม่บ้าน', 'พนักงานขับรถ', 'ยามรักษาการ'];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
 // The size tape spans 16 inches: one inch either side of the smallest and largest chest.
@@ -218,7 +222,7 @@ class App extends Component {
     st.forEach(p => {
       if (rnd() < 0.62) {
         const si = Math.min(7, Math.max(0, Math.round(3 + (rnd() + rnd() - 1) * 3)));
-        const design = rnd() < 0.57 ? '2' : '1';
+        const ids = designsFor(this.state.cfg.round).map(d => d.id), design = rnd() < 0.57 ? ids[1] : ids[0];
         const extras = rnd() < 0.88 ? [] : [{ size: SIZES[Math.max(0, si - 1)] }];
         out.push({ name: p.name, dept: p.dept, design, size: SIZES[si], extras, qty: 1 + extras.length, phone: '', note: '', time: Date.now() - Math.floor(rnd() * 5 * 864e5) });
       }
@@ -249,7 +253,7 @@ class App extends Component {
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'ตรวจสอบไม่สำเร็จ');
       const v = body.vote;
-      this.setState({ unlocking: false, prevVote: v, design: v.design, size: v.size, extras: extrasOf(v), note: v.note || '', extra: !!v.note });
+      this.setState({ unlocking: false, prevVote: v, design: offered(this.state.cfg.round, v.design), size: v.size, extras: extrasOf(v), note: v.note || '', extra: !!v.note });
     } catch (e) {
       this.setState({ unlocking: false, unlockErr: e.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองอีกครั้ง' : e.message });
     }
@@ -545,7 +549,7 @@ class App extends Component {
     // Each section shows green when complete; red only after the voter presses confirm with gaps left.
     const steps = [
       { id: 'step-name', ok: !!s.person && !needsUnlock && validPhone(s.phone), need: !s.person ? 'เลือกชื่อของท่าน' : 'ใส่เบอร์โทร 9–10 หลัก' },
-      { id: 'step-design', ok: !!s.design, need: 'เลือกแบบที่ท่านโหวต' },
+      { id: 'step-design', ok: !!offered(s.cfg.round, s.design), need: 'เลือกแบบที่ท่านโหวต' },
       { id: 'step-size', ok: !!s.size, need: 'แตะไซซ์บนสายวัด' },
       ...(s.extras.length ? [{ id: 'step-extra', ok: s.extras.every(x => x.size), need: 'เลือกไซซ์ของเสื้อที่สั่งเพิ่มให้ครบ' }] : [])
     ];
@@ -573,7 +577,8 @@ class App extends Component {
     const hintClass = s.error || locked ? 'err' : allOk ? 'ok' : s.showMissing ? 'err' : '';
     const summary = ([s.design && dLabel(s.design), s.size && `ไซซ์ ${s.size}`].filter(Boolean).join(' · ') || 'ยังไม่ได้เลือกเสื้อ')
       + (s.extras.length ? ` + เพิ่ม ${s.extras.length} ตัว` : '');
-    const chartFor = (DESIGNS.find(d => d.id === s.design && d.chart) || DESIGNS[0]).id;
+    const designs = designsFor(s.cfg.round);
+    const chartFor = (designs.find(d => d.id === s.design && d.chart) || designs[0]).id;
 
     return html`
 ${this.renderHero(total, isOpen)}
@@ -609,7 +614,7 @@ ${this.renderHero(total, isOpen)}
       </div>
     </div>
     <div class="shirts">
-      ${DESIGNS.map(d => {
+      ${designs.map(d => {
         const sel = s.design === d.id;
         return html`
         <div class="shirt ${sel ? 'on' : ''}" key=${d.id}>
@@ -875,8 +880,9 @@ ${this.renderHero(total, isOpen)}
 
   renderLightbox() {
     const lb = this.state.lightbox;
-    // "ดูแบบถัดไป" steps through the designs in order.
-    const idx = DESIGNS.findIndex(x => x.id === lb.id), d = DESIGNS[idx], other = DESIGNS[(idx + 1) % DESIGNS.length];
+    // "ดูแบบถัดไป" steps through the designs of the same round.
+    const list = designsFor(Object.keys(ROUND_DESIGNS).find(r => ROUND_DESIGNS[r].includes(lb.id)));
+    const idx = list.findIndex(x => x.id === lb.id), d = list[idx], other = list[(idx + 1) % list.length];
     const setKind = kind => this.setState(st => ({ lightbox: { ...st.lightbox, kind } }));
     // The detail boards are large; show how much has arrived, and say so if it fails (see loadLbImage).
     const src = lbSrc(lb);
