@@ -28,9 +28,9 @@ const CONFIG = {
   adminEnabled: !!ADMIN_KEY
 };
 
-const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
 // Designs offered in each round (same as ROUND_DESIGNS in app.js); a later round offers the last listed set.
-const ROUND_DESIGN_IDS = { 1: ['1', '2'], 2: ['4', '5'] };
+const ROUND_DESIGN_IDS = { 1: ['1', '2'], 2: ['6', '7', '4', '5'] };
 const designIds = round => ROUND_DESIGN_IDS[round] || ROUND_DESIGN_IDS[Math.max(...Object.keys(ROUND_DESIGN_IDS).map(Number))];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
 const OTHER_DEPT = 'อื่นๆ';

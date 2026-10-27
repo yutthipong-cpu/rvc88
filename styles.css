@@ -134,13 +134,13 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 /* Size tape */
 .tape{margin-top:16px;padding:0 4px;user-select:none}
 .tape-marks{position:relative;height:52px}
-.size-mark{position:absolute;bottom:8px;width:36px;height:40px;margin-left:-18px;border:1.5px solid #C5CDDA;border-radius:8px;background:#fff;font:600 13px/1 var(--mono);color:var(--ink);padding:0;letter-spacing:-.02em}
+.size-mark{position:absolute;bottom:8px;width:calc(10% - 3px);max-width:40px;height:40px;transform:translateX(-50%);border:1.5px solid #C5CDDA;border-radius:8px;background:#fff;font:600 12px/1 var(--mono);color:var(--ink);padding:0;letter-spacing:-.04em}
 .size-mark[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
 .size-mark[aria-pressed="true"]::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-top-color:var(--navy);border-bottom:0}
 .tape-strip{position:relative;height:46px;border-radius:3px;background:var(--tape);box-shadow:inset 0 -2px 0 rgba(0,0,0,.12)}
 .tape-strip::before,.tape-strip::after{content:'';position:absolute;left:0;right:0;top:0;pointer-events:none}
-.tape-strip::before{height:16px;background:repeating-linear-gradient(90deg,rgba(40,30,0,.7) 0 1px,transparent 1px 6.25%)}
-.tape-strip::after{height:9px;background:repeating-linear-gradient(90deg,transparent 0 3.125%,rgba(40,30,0,.45) 3.125% calc(3.125% + 1px),transparent calc(3.125% + 1px) 6.25%)}
+.tape-strip::before{height:16px;background:repeating-linear-gradient(90deg,rgba(40,30,0,.7) 0 1px,transparent 1px 5%)}
+.tape-strip::after{height:9px;background:repeating-linear-gradient(90deg,transparent 0 2.5%,rgba(40,30,0,.45) 2.5% calc(2.5% + 1px),transparent calc(2.5% + 1px) 5%)}
 .tape-num{position:absolute;bottom:5px;transform:translateX(-50%);font:500 12px/1 var(--mono);color:#3A2E00}
 .tape-read{position:absolute;top:0;height:24px;width:2px;margin-left:-1px;background:var(--mark);pointer-events:none}
 .tape-num.on{color:var(--mark);font-weight:600}
@@ -312,7 +312,7 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .closed-card b{font-size:18px}
 .closed-card p{margin:0;font-size:14px;color:var(--muted)}
 .shirt:last-child:nth-child(odd){grid-column:1/-1;justify-self:center;width:calc(50% - 5px)}
-@media (min-width:600px){.shirts{grid-template-columns:repeat(3,1fr)}.shirt:last-child:nth-child(odd){grid-column:auto;width:auto}}
+@media (min-width:600px){.shirts{grid-template-columns:repeat(var(--cols,3),1fr)}.shirt:last-child:nth-child(odd){grid-column:auto;width:auto}}
 .results .seg{align-self:flex-start;flex-wrap:wrap}
 /* Banner note that this device's vote is saved */
 .voted-card{margin-top:14px;width:min(340px,100%);display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;background:#EAF6EF;border:1px solid #A7D8BC;text-align:left}

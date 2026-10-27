@@ -4,26 +4,29 @@ import { html, render, Component } from 'https://unpkg.com/htm@3.1.1/preact/stan
 const DEFAULT_CONFIG = { round: 1, pastRounds: [], votingOpen: true, allowChangeVote: true, hideResults: false, sampleData: false, adminEnabled: false };
 const POLL_MS = 10000;
 
-const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
-// One cut for everyone (from the shop's size chart), in inches.
-const CHART = { chest: [34, 36, 38, 40, 42, 44, 46, 48], len: [24, 25, 26, 27, 28, 29, 30, 31] };
+const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+// One cut for everyone (from the shops' size charts), in inches. The charts stop at 3XL;
+// 4XL and 5XL chests follow the same 2-inch steps and their length is not known yet.
+const CHART = { chest: [34, 36, 38, 40, 42, 44, 46, 48, 50, 52], len: [24, 25, 26, 27, 28, 29, 30, 31, null, null] };
 const DESIGNS = [
   { id: '1', label: 'แบบที่ 1', tone: 'น้ำเงินเข้ม ชายเสื้อลายไทยสีทอง', front: 'assets/d2-front.png', back: 'assets/d2-back.png', board: 'assets/d2-board.jpg', chart: 'assets/d2-size.jpg' },
   { id: '2', label: 'แบบที่ 2', tone: 'ฟ้า–ขาว เส้นทองพลิ้ว', front: 'assets/d1-front.png', back: 'assets/d1-back.png', board: 'assets/d1-board.jpg', chart: 'assets/d1-size.jpg' },
   // Round 2 designs. Numbered again from 1 because each round is voted on by itself.
-  { id: '4', label: 'แบบที่ 1', tone: 'ขาว ชายน้ำเงินลายไทย เส้นทอง มีกระเป๋า', front: 'assets/d4-front.webp', back: 'assets/d4-back.webp', board: 'assets/d4-board.jpg', chart: 'assets/d4-size.jpg' },
-  { id: '5', label: 'แบบที่ 2', tone: 'ขาวไล่ฟ้า เลข 88 R-Cheewa มีกระเป๋า', front: 'assets/d5-front.webp', back: 'assets/d5-back.webp', board: 'assets/d5-board.jpg', chart: 'assets/d5-size.jpg' }
+  { id: '6', label: 'แบบที่ 1', tone: 'ฟ้า แขนน้ำเงิน เส้นทอง ชายลายไทย มีกระเป๋า', front: 'assets/d6-front.webp', back: 'assets/d6-back.webp', board: 'assets/d6-board.jpg', chart: 'assets/d6-size.jpg' },
+  { id: '7', label: 'แบบที่ 2', tone: 'ฟ้าไล่ขาว แขนน้ำเงิน เส้นทองพลิ้ว มีกระเป๋า', front: 'assets/d7-front.webp', back: 'assets/d7-back.webp', board: 'assets/d7-board.jpg', chart: 'assets/d7-size.jpg' },
+  { id: '4', label: 'แบบที่ 3', tone: 'ขาว ชายน้ำเงินลายไทย เส้นทอง มีกระเป๋า', front: 'assets/d4-front.webp', back: 'assets/d4-back.webp', board: 'assets/d4-board.jpg', chart: 'assets/d4-size.jpg' },
+  { id: '5', label: 'แบบที่ 4', tone: 'ขาวไล่ฟ้า เลข 88 R-Cheewa มีกระเป๋า', front: 'assets/d5-front.webp', back: 'assets/d5-back.webp', board: 'assets/d5-board.jpg', chart: 'assets/d5-size.jpg' }
 ];
-// Designs offered in each round; a later round not listed here offers the last listed set.
-const ROUND_DESIGNS = { 1: ['1', '2'], 2: ['4', '5'] };
+// Designs offered in each round, in display order; a later round not listed here offers the last listed set.
+const ROUND_DESIGNS = { 1: ['1', '2'], 2: ['6', '7', '4', '5'] };
 const LAST_ROUND = Math.max(...Object.keys(ROUND_DESIGNS).map(Number));
-const designsFor = round => DESIGNS.filter(d => (ROUND_DESIGNS[round] || ROUND_DESIGNS[LAST_ROUND]).includes(d.id));
+const designsFor = round => (ROUND_DESIGNS[round] || ROUND_DESIGNS[LAST_ROUND]).map(id => DESIGNS.find(d => d.id === id));
 // A vote's design only counts in the form if this round offers it.
 const offered = (round, id) => designsFor(round).some(d => d.id === id) ? id : null;
 const ORDER = ['ฝ่ายบริหาร', 'ผู้ช่วยศาสตราจารย์', 'แผนกวิชาสามัญสัมพันธ์', 'แผนกวิชาการบัญชี', 'แผนกวิชาการตลาด', 'แผนกวิชาโลจิสติกส์', 'แผนกวิชาเทคโนโลยีธุรกิจดิจิทัล', 'แผนกวิชาเทคโนโลยีสารสนเทศ', 'แผนกวิชาวิจิตรศิลป์', 'แผนกวิชาออกแบบ', 'แผนกวิชาคอมพิวเตอร์กราฟิก', 'แผนกวิชาแฟชั่นและสิ่งทอ', 'แผนกวิชาคหกรรมศาสตร์', 'แผนกวิชาอาหารและโภชนาการ', 'แผนกวิชาการโรงแรม', 'แผนกวิชาการท่องเที่ยว', 'ลูกจ้างชั่วคราว', 'นักการ', 'แม่บ้าน', 'พนักงานขับรถ', 'ยามรักษาการ'];
 const GROUP_LABEL = { 'ลูกจ้างชั่วคราว': 'เจ้าหน้าที่ธุรการ (ลูกจ้างชั่วคราว)' };
-// The size tape spans 16 inches: one inch either side of the smallest and largest chest.
-const TAPE_SPAN = 16;
+// The size tape spans 20 inches: one inch either side of the smallest and largest chest (styles.css draws its ticks to match).
+const TAPE_SPAN = 20;
 
 const norm = s => (s || '').replace(/\s+/g, '').toLowerCase();
 const fmtTime = t => new Date(t).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -445,7 +448,7 @@ class App extends Component {
         </div>
       </div>
       <p class="reading">${idx < 0 ? 'แตะไซซ์บนสายวัด ตัวเลขคือรอบอก (นิ้ว)'
-        : html`<b>${size}</b> · รอบอก <b class="mono">${chart.chest[idx]}"</b> · ยาว <b class="mono">${chart.len[idx]}"</b> <span class="hint">(±1 นิ้ว)</span>`}</p>`;
+        : html`<b>${size}</b> · รอบอก <b class="mono">${chart.chest[idx]}"</b> ${chart.len[idx] ? html` · ยาว <b class="mono">${chart.len[idx]}"</b>` : ''} <span class="hint">(±1 นิ้ว)</span>`}</p>`;
   }
 
   setExtra(i, patch) {
@@ -613,7 +616,7 @@ ${this.renderHero(total, isOpen)}
         <button aria-pressed=${s.side === 'back'} onClick=${() => this.setState({ side: 'back' })}>ด้านหลัง</button>
       </div>
     </div>
-    <div class="shirts">
+    <div class="shirts" style=${`--cols:${designs.length % 2 ? 3 : 2}`}>
       ${designs.map(d => {
         const sel = s.design === d.id;
         return html`
