@@ -163,7 +163,12 @@ async function api(req, res, url) {
       catch (e) { return send(res, 404, { error: 'ไม่พบข้อมูลรอบนี้' }); }
     }
     if (isAdmin(req)) return send(res, 200, votes);
-    if (settings.resultsPublic) return send(res, 200, votes.map(publicVote));
+    // Open results show only how many votes each design has: no names, sizes or order of voting.
+    if (settings.resultsPublic) {
+      const tally = {};
+      votes.forEach(v => { tally[v.design] = (tally[v.design] || 0) + 1; });
+      return send(res, 200, { tally });
+    }
     return send(res, 401, { error: 'รหัสไม่ถูกต้อง' });
   }
 

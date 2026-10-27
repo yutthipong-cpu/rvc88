@@ -178,7 +178,9 @@ class App extends Component {
         return false;
       }
       if (!r.ok) return false;
-      this.setState({ votes: await r.json() });
+      // Without the password the server sends only the count per design.
+      const body = await r.json();
+      this.setState(Array.isArray(body) ? { votes: body, tally: null } : { votes: [], tally: body.tally || {} });
       return true;
     } catch (e) { return false; }
   }
@@ -692,12 +694,15 @@ ${this.renderHero(total, isOpen)}
 
   renderResults(votes, total) {
     const s = this.state;
-    const voted = votes.length;
+    let voted = votes.length;
     const hide = s.cfg.hideResults, sampleOn = s.cfg.sampleData;
     const round = this.resultRound(), designs = designsFor(round);
     const rounds = [...(s.cfg.pastRounds || []), s.cfg.round];
+    // Everyone else sees the score of each design only; the admin sees sizes, departments and names.
+    const pub = !s.adminKey && !s.cfg.sampleData;
 
-    const counts = designs.map(d => votes.filter(v => v.design === d.id).length);
+    const counts = designs.map(d => pub ? (s.tally || {})[d.id] || 0 : votes.filter(v => v.design === d.id).length);
+    if (pub) voted = counts.reduce((a, b) => a + b, 0);
     const maxC = Math.max(...counts), tie = counts.every(c => c === counts[0]);
 
     // Shirt counts include every shirt ordered.
@@ -728,7 +733,7 @@ ${this.renderHero(total, isOpen)}
       ${rounds.map(r => html`<button aria-pressed=${r === round} onClick=${() => this.viewRound(r)}>รอบที่ ${r}${r === s.cfg.round ? ' (ปัจจุบัน)' : ''}</button>`)}
     </div>`}
   ${s.viewRound && html`<div class="notice info">ข้อมูลรอบที่ ${round} เก็บไว้ดูอย่างเดียว แก้ไขไม่ได้</div>`}
-  <p class="count">${this.countText(votes.map(v => v.name), total)}</p>
+  <p class="count">${this.countText(pub ? s.names : votes.map(v => v.name), total)}</p>
   ${s.adminMsg && html`<div class="notice info admin-msg" role="status"><span>${s.adminMsg}</span><button class="text-btn" onClick=${() => this.setState({ adminMsg: '' })}>ปิด</button></div>`}
 
   ${s.adminKey && !s.viewRound && html`
@@ -769,6 +774,7 @@ ${this.renderHero(total, isOpen)}
       })}
     </div>
 
+    ${pub ? html`<button class="text-btn" style="align-self:flex-start" onClick=${() => this.askForKey()}>ผู้ดูแล: ใส่รหัสเพื่อดูรายละเอียด</button>` : html`
     <section class="panel">
       <h2>จำนวนเสื้อที่ต้องสั่งผลิต</h2>
       <p class="hint">นับทุกตัว รวมตัวที่ชำระเอง</p>
@@ -814,7 +820,7 @@ ${this.renderHero(total, isOpen)}
       ${list.length === 0 && html`<p class="empty">${emptyText}</p>`}
       ${s.adminKey ? canClear && html`<button class="danger" onClick=${() => this.setState({ confirmClear: true })}>ล้างข้อมูลการโหวตทั้งหมด</button>`
         : html`<button class="text-btn" style="align-self:flex-start" onClick=${() => this.askForKey()}>ผู้ดูแล: ใส่รหัสเพื่อดาวน์โหลด</button>`}
-    </section>`}
+    </section>`}`}
 </main>`;
   }
 
