@@ -240,7 +240,7 @@ class App extends Component {
     try {
       const r = await fetch('api/votes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: s.person.name, design: s.design, size: s.size, extras: s.extras.map(x => ({ size: x.size })), phone: digits(s.phone), note: s.note.trim() })
+        body: JSON.stringify({ name: s.person.name, design: s.design, size: s.size, extras: s.extras.map(x => ({ size: x.size })), phone: digits(s.phone), note: s.note.trim(), website: (document.getElementById('website') || {}).value || '' })
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'บันทึกไม่สำเร็จ');
@@ -469,8 +469,11 @@ class App extends Component {
       <button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>` : html`
       <div class="closed-card" role="status">
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        ${s.cfg.full && s.cfg.votingOpen ? html`
+        <b>รับโหวตครบจำนวนแล้ว</b>
+        <p>หากท่านยังไม่ได้โหวต โปรดติดต่อผู้ดูแล</p>` : html`
         <b>ระบบโหวตยังไม่เปิด</b>
-        <p>ผู้ดูแลจะเปิดให้โหวตเร็ว ๆ นี้ กลับมาที่หน้านี้อีกครั้งภายหลัง</p>
+        <p>ผู้ดูแลจะเปิดให้โหวตเร็ว ๆ นี้ กลับมาที่หน้านี้อีกครั้งภายหลัง</p>`}
       </div>`}
   </div>
   ${isOpen && html`<button class="hero-down" aria-label="เลื่อนลงไปกรอกข้อมูล" onClick=${() => this.scrollToForm()}>
@@ -481,8 +484,8 @@ class App extends Component {
 
   renderVote(voted, total) {
     const s = this.state;
-    const isOpen = s.cfg.votingOpen;
-    // While voting is closed the page is only the banner, saying so.
+    const isOpen = s.cfg.votingOpen && !s.cfg.full;
+    // While voting is closed (or the vote limit is reached) the page is only the banner, saying so.
     if (!isOpen) return this.renderHero(total, false);
     const myVoted = new Set(s.names);
     // One vote per person: a name that has voted cannot vote again; only the admin can change it.
@@ -581,6 +584,7 @@ ${this.renderHero(total, isOpen)}
 
   ${this.renderExtras(s.extras.length ? stepClass('step-extra') : '', s.extras.length && !step('step-extra').ok && s.showMissing ? step('step-extra').need : '')}
 
+  <div class="hp" aria-hidden="true"><label for="website">เว็บไซต์</label><input id="website" name="website" tabindex="-1" autocomplete="off" /></div>
   <section class="block">
     <div class="block-head"><h2>หมายเหตุถึงผู้จัดทำ <span class="hint" style="font-weight:400">(ไม่บังคับ)</span></h2></div>
     ${s.extra || s.note ? html`
@@ -804,12 +808,39 @@ ${this.renderHero(total, isOpen)}
       this.setState({ editSaving: false, editErr: err.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองอีกครั้ง' : err.message });
     }
   }
+  // Removes one person's vote, so they can vote again from the form.
+  async deleteVote() {
+    const s = this.state, e = s.edit;
+    if (s.editSaving) return;
+    this.setState({ editSaving: true, editErr: '' });
+    try {
+      const r = await fetch('api/votes?name=' + encodeURIComponent(e.name), { method: 'DELETE', headers: { 'x-admin-key': s.adminKey } });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'ลบไม่สำเร็จ');
+      this.setState({ editSaving: false, edit: null, adminMsg: `ลบโหวตของ ${e.name} แล้ว` });
+      this.refresh();
+    } catch (err) {
+      this.setState({ editSaving: false, editErr: err.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองอีกครั้ง' : err.message });
+    }
+  }
   renderAdminEdit() {
     const s = this.state, e = s.edit;
     const set = patch => this.setState(st => ({ edit: { ...st.edit, ...patch } }));
     const setExtra = (i, patch) => set({ extras: e.extras.map((x, j) => j === i ? { ...x, ...patch } : x) });
     const close = () => { if (!s.editSaving) this.setState({ edit: null, editErr: '' }); };
     const ready = offered(s.cfg.round, e.design) && e.size && e.extras.every(x => x.size);
+    if (e.confirmDelete) return html`
+<div class="backdrop" onClick=${ev => { if (ev.target === ev.currentTarget) close(); }}>
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="del-title" aria-describedby="del-desc">
+    <h2 id="del-title">ลบโหวตนี้?</h2>
+    <p id="del-desc">โหวตของ <b>${e.name}</b> จะถูกลบและกู้คืนไม่ได้ เจ้าของชื่อจะโหวตใหม่ได้</p>
+    ${s.editErr && html`<p class="lock-err" style="margin:0" role="alert">${s.editErr}</p>`}
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" disabled=${s.editSaving} onClick=${() => set({ confirmDelete: false })}>ยกเลิก</button>
+      <button class="btn btn-danger" disabled=${s.editSaving} onClick=${() => this.deleteVote()}>${s.editSaving ? 'กำลังลบ…' : 'ลบโหวต'}</button>
+    </div>
+  </div>
+</div>`;
     return html`
 <div class="backdrop" onClick=${ev => { if (ev.target === ev.currentTarget) close(); }}>
   <div class="sheet edit-sheet" role="dialog" aria-modal="true" aria-labelledby="edit-title">
@@ -837,6 +868,7 @@ ${this.renderHero(total, isOpen)}
       <button class="btn btn-ghost" disabled=${s.editSaving} onClick=${close}>ยกเลิก</button>
       <button class="btn btn-primary" disabled=${s.editSaving || !ready} onClick=${() => this.saveEdit()}>${s.editSaving ? 'กำลังบันทึก…' : 'บันทึก'}</button>
     </div>
+    <button class="danger" disabled=${s.editSaving} onClick=${() => this.setState(st => ({ edit: { ...st.edit, confirmDelete: true }, editErr: '' }))}>ลบโหวตนี้</button>
   </div>
 </div>`;
   }

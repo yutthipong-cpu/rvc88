@@ -89,7 +89,29 @@ const shirtsOf = b => {
   const extras = (Array.isArray(b.extras) ? b.extras : []).map(x => ({ size: x.size }));
   return { design: b.design, size: b.size, extras, qty: 1 + extras.length };
 };
-const isAdmin = req => !!ADMIN_KEY && req.headers['x-admin-key'] === ADMIN_KEY;
+// Spam guards: at most MAX_VOTES votes a round (127 staff plus room for names not on the list),
+// a limit on new votes per address and per phone number, and on wrong admin passwords.
+const MAX_VOTES = Number(process.env.MAX_VOTES) || 150;
+const VOTES_PER_IP = 40, IP_WINDOW = 10 * 60 * 1000; // a whole office can share one address
+const VOTES_PER_PHONE = 5; // someone may vote for a colleague with their own number
+const KEY_FAILS = 20, KEY_WINDOW = 15 * 60 * 1000;
+const clientIp = req => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+const hits = new Map();
+const recent = (k, win) => { const now = Date.now(); const t = (hits.get(k) || []).filter(x => now - x < win); if (t.length) hits.set(k, t); else hits.delete(k); return t; };
+const tooMany = (k, max, win) => recent(k, win).length >= max;
+const note = k => hits.set(k, (hits.get(k) || []).concat(Date.now()));
+setInterval(() => { for (const k of [...hits.keys()]) recent(k, Math.max(IP_WINDOW, KEY_WINDOW)); }, IP_WINDOW).unref();
+
+// After too many wrong passwords from one address, even the right one is refused for a while.
+function isAdmin(req) {
+  const given = req.headers['x-admin-key'];
+  if (!ADMIN_KEY || !given) return false;
+  const k = 'key|' + clientIp(req);
+  if (tooMany(k, KEY_FAILS, KEY_WINDOW)) return false;
+  if (given === ADMIN_KEY) return true;
+  note(k);
+  return false;
+}
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -107,7 +129,7 @@ function readBody(req) {
 
 async function api(req, res, url) {
   if (url.pathname === '/api/config' && req.method === 'GET') {
-    return send(res, 200, { ...CONFIG, votingOpen: settings.votingOpen, resultsPublic: settings.resultsPublic, round: settings.round, pastRounds: archivedRounds() });
+    return send(res, 200, { ...CONFIG, votingOpen: settings.votingOpen, resultsPublic: settings.resultsPublic, round: settings.round, pastRounds: archivedRounds(), full: votes.length >= MAX_VOTES });
   }
 
   if (url.pathname === '/api/settings' && req.method === 'PUT') {
@@ -165,6 +187,12 @@ async function api(req, res, url) {
     let b;
     try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
     if (!settings.votingOpen) return send(res, 403, { error: 'ระบบโหวตยังไม่เปิด' });
+    // "website" is a hidden field people never see; only form-filling bots put something in it.
+    if (b.website) return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' });
+    const ipKey = 'vote|' + clientIp(req);
+    if (tooMany(ipKey, VOTES_PER_IP, IP_WINDOW)) return send(res, 429, { error: 'ส่งโหวตถี่เกินไป รอสักครู่แล้วลองใหม่' });
+    note(ipKey);
+    if (votes.length >= MAX_VOTES) return send(res, 403, { error: `รับโหวตครบ ${MAX_VOTES} รายการแล้ว โปรดติดต่อผู้ดูแล` });
     // Names not on the staff list are allowed and grouped under "อื่นๆ".
     const name = String(b.name || '').replace(/\s+/g, ' ').trim();
     const known = staffByName.has(name);
@@ -175,6 +203,7 @@ async function api(req, res, url) {
     if (!validPhone(b.phone)) return send(res, 400, { error: 'กรอกเบอร์โทร 9–10 หลัก' });
     // One vote per person; only the admin can change it afterwards (PUT below).
     if (votes.some(v => v.name === name)) return send(res, 409, { error: 'ชื่อนี้โหวตแล้ว หากต้องการแก้ไข โปรดติดต่อผู้ดูแล' });
+    if (votes.filter(v => v.phone === digits(b.phone)).length >= VOTES_PER_PHONE) return send(res, 409, { error: `เบอร์นี้ใช้โหวตครบ ${VOTES_PER_PHONE} ชื่อแล้ว` });
     const vote = {
       name, dept: known ? staffByName.get(name) : OTHER_DEPT, ...(known ? {} : { other: true }), ...shirtsOf(b),
       phone: digits(b.phone),
@@ -203,7 +232,12 @@ async function api(req, res, url) {
 
   if (url.pathname === '/api/votes' && req.method === 'DELETE') {
     if (!isAdmin(req)) return send(res, 401, { error: 'รหัสผู้ดูแลไม่ถูกต้อง' });
-    votes = [];
+    // ?name= removes one person's vote; without it every vote of the current round is cleared.
+    const name = url.searchParams.get('name');
+    if (name != null) {
+      if (!votes.some(v => v.name === name)) return send(res, 404, { error: 'ไม่พบโหวตของชื่อนี้' });
+      votes = votes.filter(v => v.name !== name);
+    } else votes = [];
     await persist();
     return send(res, 200, { ok: true });
   }

@@ -24,6 +24,8 @@ img{display:block;max-width:100%}
 h1,h2,h3,p{margin:0}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Spam trap: off screen and hidden from assistive tech; only bots fill it */
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 
 .app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
 .wrap{width:100%;max-width:640px;margin:0 auto;padding:0 16px}

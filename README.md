@@ -33,11 +33,14 @@ Votes and the results switch are kept in the `rvc88_store` Docker volume, so reb
 | `ADMIN_KEY` | (none) | Password for the results page, the Excel/CSV downloads and clearing all votes. Without it those are turned off. |
 | `VOTING_OPEN` | `true` | `false` closes voting |
 | `HIDE_RESULTS` | `false` | `true` hides results per design |
+| `MAX_VOTES` | `150` | most votes accepted in a round |
 | `SAMPLE_DATA` | `false` | `true` shows generated sample votes on the results page |
 
 ## Data
 
 - `data/staff.json`: the staff list, `[["name", "department"], ...]`. Only names on this list can vote. The server reads it at start, so restart after editing it.
 - `votes.json` and `settings.json` in `DATA_DIR`: written by the server. Back them up before clearing votes.
+
+Spam guards: at most MAX_VOTES votes a round, 40 vote attempts per address per 10 minutes, 5 names per phone number, a hidden field that only bots fill, and 20 wrong admin passwords per address per 15 minutes. The admin can delete one vote from its แก้ไข popup.
 
 Phone numbers and notes only go to the admin. When results are opened to everyone, the public sees only the score of each design.
