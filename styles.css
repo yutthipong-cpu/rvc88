@@ -112,6 +112,10 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .block-head .seg{flex:none}
 .block-head .seg button{padding:0 10px}
 .seg.full{display:flex}
+/* Admin edit popup: may be taller than the screen; the four designs share one row */
+.edit-sheet{max-height:calc(100dvh - 24px);overflow:auto}
+.edit-designs{display:flex}
+.edit-designs button{flex:1;padding:0 6px}
 .seg.full button{flex:1;height:44px;font-size:16px}
 
 /* Shirt choice */
@@ -278,9 +282,6 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 .people .what small{display:block;font-size:12px;color:var(--muted)}
 .empty{padding:20px 0;text-align:center;color:var(--muted)}
 .sheet.lock h2{font-size:22px}
-.unlock{display:flex;gap:8px;margin-top:10px}
-.unlock .field{flex:1;min-width:0;height:46px}
-.unlock .btn{height:46px;padding:0 14px}
 .notice .lock-err{margin-top:8px}
 .field[readonly]{background:#F0F3F8;color:var(--muted)}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
@@ -315,10 +316,4 @@ textarea.field{height:auto;min-height:76px;padding:12px 14px;resize:vertical;lin
 @media (min-width:600px){.shirts{grid-template-columns:repeat(var(--cols,3),1fr)}.shirt:last-child:nth-child(odd){grid-column:auto;width:auto}}
 .results .seg{align-self:flex-start;flex-wrap:wrap}
 /* Banner note that this device's vote is saved */
-.voted-card{margin-top:14px;width:min(340px,100%);display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;background:#EAF6EF;border:1px solid #A7D8BC;text-align:left}
-.voted-icon{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ok);color:#fff}
-.voted-card div{min-width:0;line-height:1.45}
-.voted-card b{display:block;font-size:16px;color:#1B5E3A}
-.voted-card span{display:block;font-size:14px;color:var(--ink)}
-.voted-card .text-btn{font-size:13px;font-weight:400;color:var(--muted);padding:2px 0 0}
 .btn.hero-cta.btn-ghost{background:#fff}

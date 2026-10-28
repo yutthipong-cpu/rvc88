@@ -1,6 +1,6 @@
 # ระบบโหวตเลือกแบบเสื้อที่ระลึก 88 ปี
 
-Voting page for the Roi Et Vocational College 88th-anniversary shirt. Staff pick their name, give a phone number, vote for a design, and give the size of each shirt they order (one cut for everyone) (the first is free, extras are paid). The phone number is that person's code for editing the vote later; wrong guesses are limited to 5 per 15 minutes. Votes from every device are saved on the server.
+Voting page for the Roi Et Vocational College 88th-anniversary shirt. Staff pick their name, give a phone number, vote for a design, and give the size of each shirt they order (one cut for everyone) (the first is free, extras are paid). Each person votes once; only the admin can change a vote afterwards (the แก้ไข button in the results list). The phone number is kept so the admin can reach the voter. Votes from every device are saved on the server.
 
 Live at https://rvc88.tuatorton.com
 
@@ -32,7 +32,6 @@ Votes and the results switch are kept in the `rvc88_store` Docker volume, so reb
 | `DATA_DIR` | `./data` | Folder that holds `votes.json` and `settings.json` |
 | `ADMIN_KEY` | (none) | Password for the results page, the Excel/CSV downloads and clearing all votes. Without it those are turned off. |
 | `VOTING_OPEN` | `true` | `false` closes voting |
-| `ALLOW_CHANGE_VOTE` | `true` | `false` stops people from editing a vote |
 | `HIDE_RESULTS` | `false` | `true` hides results per design |
 | `SAMPLE_DATA` | `false` | `true` shows generated sample votes on the results page |
 
@@ -41,4 +40,4 @@ Votes and the results switch are kept in the `rvc88_store` Docker volume, so reb
 - `data/staff.json`: the staff list, `[["name", "department"], ...]`. Only names on this list can vote. The server reads it at start, so restart after editing it.
 - `votes.json` and `settings.json` in `DATA_DIR`: written by the server. Back them up before clearing votes.
 
-Phone numbers and notes only go to the admin. When results are opened to everyone, the public view leaves them out.
+Phone numbers and notes only go to the admin. When results are opened to everyone, the public sees only the score of each design.

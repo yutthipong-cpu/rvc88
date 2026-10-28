@@ -1,7 +1,7 @@
 import { html, render, Component } from 'https://unpkg.com/htm@3.1.1/preact/standalone.module.js';
 
 // Settings come from the server (see server.js); these defaults apply until /api/config loads.
-const DEFAULT_CONFIG = { round: 1, pastRounds: [], votingOpen: true, allowChangeVote: true, hideResults: false, sampleData: false, adminEnabled: false };
+const DEFAULT_CONFIG = { round: 1, pastRounds: [], votingOpen: true, hideResults: false, sampleData: false, adminEnabled: false };
 const POLL_MS = 10000;
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
@@ -45,10 +45,6 @@ function scrollToEl(el, where) {
   const top = where === 'center' ? r.top + window.scrollY - (window.innerHeight - r.height) / 2 : r.top + window.scrollY - 80;
   window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 }
-// The last vote made on this device, so the banner can say it is done. Browser storage may be blocked.
-const MINE_KEY = 'rvc88-my-vote';
-const readMine = () => { try { return JSON.parse(localStorage.getItem(MINE_KEY) || 'null'); } catch (e) { return null; } };
-const writeMine = v => { try { if (v) localStorage.setItem(MINE_KEY, JSON.stringify(v)); else localStorage.removeItem(MINE_KEY); } catch (e) {} };
 // Every shirt in a vote: the first (free) then the paid extras. Shirts have a size only;
 // the design is the vote. Older votes stored only a quantity, so their extras repeat the first shirt.
 const extrasOf = v => v.extras || Array.from({ length: Math.max(0, (v.qty || 1) - 1) }, () => ({ size: v.size }));
@@ -84,7 +80,7 @@ const loadXlsx = () => xlsxLoading || (xlsxLoading = new Promise((resolve, rejec
 }));
 
 class App extends Component {
-  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, pastHero: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', viewRound: null, pastVotes: [], cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], namesLoaded: false, mine: readMine(), prevVote: null, unlockErr: '', unlocking: false, adminKey: '', askKey: false, keyInput: '', keyError: '' };
+  state = { tab: 'vote', staff: [], votes: [], query: '', open: false, hl: 0, person: null, phone: '', note: '', extra: false, design: null, side: 'front', size: null, extras: [], done: null, confirm: false, showMissing: false, pastHero: false, confirmClear: false, clearing: false, adminMsg: '', lightbox: null, rq: '', mode: 'voted', viewRound: null, pastVotes: [], cfg: DEFAULT_CONFIG, saving: false, error: '', names: [], namesLoaded: false, edit: null, editSaving: false, editErr: '', adminKey: '', askKey: false, keyInput: '', keyError: '' };
 
   componentDidMount() {
     fetch('data/staff.json').then(r => r.json()).then(rows => {
@@ -122,8 +118,8 @@ class App extends Component {
   }
   scrollToForm() { scrollToEl(document.getElementById('step-name'), 'start'); }
   componentDidUpdate(_, prev) {
-    // Lock page scroll behind the lightbox, the done sheet and the password popup.
-    const modal = st => !!(st.lightbox || st.done || st.askKey || st.confirm || st.confirmClear);
+    // Lock page scroll behind the lightbox and the popups.
+    const modal = st => !!(st.lightbox || st.done || st.askKey || st.confirm || st.confirmClear || st.edit);
     const locked = modal(this.state);
     if (locked !== modal(prev)) document.body.style.overflow = locked ? 'hidden' : '';
     if (this.state.askKey && !prev.askKey) { const el = document.getElementById('key'); if (el) el.focus(); }
@@ -236,33 +232,7 @@ class App extends Component {
   }
   shownVotes() { return this.state.cfg.sampleData ? this.sample() : this.state.votes; }
 
-  pick(p) {
-    // Someone who already voted must give their phone number before the old vote is shown (see unlockVote).
-    // Clear choices that came from someone else's opened vote, or that would hide behind the phone check.
-    const clear = this.state.prevVote || this.state.names.includes(p.name)
-      ? { design: null, size: null, extras: [], note: '', extra: false } : {};
-    // Keep a phone number typed before the name, unless it belonged to someone else's opened vote.
-    const phone = this.state.prevVote ? '' : this.state.phone;
-    this.setState({ person: p, query: '', open: false, prevVote: null, phone, unlockErr: '', error: '', ...clear });
-  }
-  // Opens an earlier vote for editing; the phone number given when voting is the code.
-  async unlockVote() {
-    const s = this.state;
-    if (s.unlocking || !validPhone(s.phone)) return;
-    this.setState({ unlocking: true, unlockErr: '' });
-    try {
-      const r = await fetch('api/vote/check', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: s.person.name, phone: s.phone })
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || 'ตรวจสอบไม่สำเร็จ');
-      const v = body.vote;
-      this.setState({ unlocking: false, prevVote: v, design: offered(this.state.cfg.round, v.design), size: v.size, extras: extrasOf(v), note: v.note || '', extra: !!v.note });
-    } catch (e) {
-      this.setState({ unlocking: false, unlockErr: e.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองอีกครั้ง' : e.message });
-    }
-  }
+  pick(p) { this.setState({ person: p, query: '', open: false, error: '' }); }
   async submit() {
     const s = this.state;
     if (s.saving) return;
@@ -274,15 +244,13 @@ class App extends Component {
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'บันทึกไม่สำเร็จ');
-      const mine = { round: s.cfg.round, name: body.name, design: body.design, size: body.size, extras: (body.extras || []).length, time: body.time };
-      writeMine(mine);
-      this.setState(st => ({ saving: false, confirm: false, done: body, prevVote: body, mine, names: st.names.includes(body.name) ? st.names : st.names.concat(body.name) }));
+      this.setState(st => ({ saving: false, confirm: false, done: body, names: st.names.includes(body.name) ? st.names : st.names.concat(body.name) }));
     } catch (e) {
       this.setState({ saving: false, error: e.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองกดอีกครั้ง' : e.message });
     }
   }
   resetForm() {
-    this.setState({ person: null, prevVote: null, unlockErr: '', query: '', phone: '', note: '', extra: false, design: null, size: null, extras: [], done: null, showMissing: false, side: 'front' });
+    this.setState({ person: null, query: '', phone: '', note: '', extra: false, design: null, size: null, extras: [], done: null, showMissing: false, side: 'front' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   setTab(tab) {
@@ -374,6 +342,7 @@ class App extends Component {
   ${s.done && this.renderDone()}
   ${s.lightbox && this.renderLightbox()}
   ${s.askKey && this.renderKeyPopup()}
+  ${s.edit && this.renderAdminEdit()}
 </div>`;
   }
 
@@ -382,8 +351,7 @@ class App extends Component {
     if (s.person) return html`
       <div class="person">
         <div><b>${s.person.name}</b><small>${s.person.dept}</small></div>
-        <button class="btn btn-ghost" style="height:40px;padding:0 14px;font-size:15px" onClick=${() => this.setState(st => ({ person: null, prevVote: null, unlockErr: '', query: '', open: true,
-          ...(st.prevVote ? { phone: '', design: null, size: null, extras: [], note: '', extra: false } : {}) }))}>เปลี่ยนชื่อ</button>
+        <button class="btn btn-ghost" style="height:40px;padding:0 14px;font-size:15px" onClick=${() => this.setState({ person: null, query: '', open: true })}>เปลี่ยนชื่อ</button>
       </div>`;
 
     const q = norm(s.query);
@@ -483,33 +451,8 @@ class App extends Component {
   </section>`;
   }
 
-  // The vote made on this device in the current round, if it still counts.
-  myVote() {
-    const s = this.state, m = s.mine;
-    if (!m || m.round !== s.cfg.round) return null;
-    return !s.namesLoaded || s.names.includes(m.name) ? m : null;
-  }
-  forgetMyVote() { writeMine(null); this.setState({ mine: null }); }
-  // Opens the form on this person's name so they can unlock their vote with their phone number.
-  editMyVote(m) {
-    const p = this.state.staff.find(x => x.name === m.name) || { name: m.name, dept: OTHER_DEPT };
-    this.pick(p);
-    // Wait for the form to redraw with the name picked, then scroll to it.
-    requestAnimationFrame(() => requestAnimationFrame(() => this.scrollToForm()));
-  }
-
   renderHero(total, isOpen) {
     const s = this.state;
-    const mine = this.myVote();
-    const votedCard = mine && html`
-      <div class="voted-card" role="status">
-        <span class="voted-icon"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <div>
-          <b>โหวตเรียบร้อยแล้ว</b>
-          <span>${mine.name} · ${dLabel(mine.design)} · ไซซ์ ${mine.size}${mine.extras ? ` + เพิ่ม ${mine.extras} ตัว` : ''}</span>
-          <button class="text-btn" onClick=${() => this.forgetMyVote()}>ไม่ใช่ท่าน? ซ่อน</button>
-        </div>
-      </div>`;
     return html`
 <section class="hero" id="hero">
   <div class="hero-top">
@@ -523,11 +466,7 @@ class App extends Component {
     ${isOpen ? html`
       <p>เลือกแบบที่ชอบ แล้วระบุไซซ์ของท่าน ท่านละ 1 สิทธิ์</p>
       <p class="count">${this.countText(s.names, total)}</p>
-      ${votedCard}
-      ${mine
-        ? html`<button class="btn btn-ghost hero-cta" onClick=${() => this.editMyVote(mine)}>แก้ไขโหวต</button>`
-        : html`<button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>`}` : html`
-      ${votedCard}
+      <button class="btn btn-primary hero-cta" onClick=${() => this.scrollToForm()}>เริ่มโหวต</button>` : html`
       <div class="closed-card" role="status">
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
         <b>ระบบโหวตยังไม่เปิด</b>
@@ -542,18 +481,15 @@ class App extends Component {
 
   renderVote(voted, total) {
     const s = this.state;
-    const allowChange = s.cfg.allowChangeVote, isOpen = s.cfg.votingOpen;
+    const isOpen = s.cfg.votingOpen;
     // While voting is closed the page is only the banner, saying so.
     if (!isOpen) return this.renderHero(total, false);
     const myVoted = new Set(s.names);
-    const prev = s.person && s.prevVote && s.prevVote.name === s.person.name ? s.prevVote : null;
-    // Picked a name that already voted, and has not yet unlocked it with their phone number.
-    const needsUnlock = !!(s.person && !prev && myVoted.has(s.person.name));
-
-    const locked = !isOpen || ((prev || needsUnlock) && !allowChange) || needsUnlock;
+    // One vote per person: a name that has voted cannot vote again; only the admin can change it.
+    const locked = !!(s.person && myVoted.has(s.person.name));
     // Each section shows green when complete; red only after the voter presses confirm with gaps left.
     const steps = [
-      { id: 'step-name', ok: !!s.person && !needsUnlock && validPhone(s.phone), need: !s.person ? 'เลือกชื่อของท่าน' : 'ใส่เบอร์โทร 9–10 หลัก' },
+      { id: 'step-name', ok: !!s.person && !locked && validPhone(s.phone), need: !s.person ? 'เลือกชื่อของท่าน' : locked ? 'ชื่อนี้โหวตแล้ว' : 'ใส่เบอร์โทร 9–10 หลัก' },
       { id: 'step-design', ok: !!offered(s.cfg.round, s.design), need: 'เลือกแบบที่ท่านโหวต' },
       { id: 'step-size', ok: !!s.size, need: 'แตะไซซ์บนสายวัด' },
       ...(s.extras.length ? [{ id: 'step-extra', ok: s.extras.every(x => x.size), need: 'เลือกไซซ์ของเสื้อที่สั่งเพิ่มให้ครบ' }] : [])
@@ -576,8 +512,8 @@ class App extends Component {
       }
       this.setState({ confirm: true, error: '' });
     };
-    const hint = s.error || (locked ? (!isOpen ? 'ปิดรับโหวตแล้ว' : !allowChange ? 'ท่านโหวตแล้ว แก้ไขไม่ได้' : 'ใส่เบอร์โทรที่ใช้ตอนโหวตเพื่อแก้ไข')
-      : allOk ? (prev ? 'ครบแล้ว จะบันทึกทับโหวตเดิม' : 'ครบแล้ว กดยืนยันได้')
+    const hint = s.error || (locked ? 'ชื่อนี้โหวตแล้ว แก้ไขได้โดยผู้ดูแล'
+      : allOk ? 'ครบแล้ว กดยืนยันได้'
       : `กรอกแล้ว ${okCount} จาก ${steps.length}`);
     const hintClass = s.error || locked ? 'err' : allOk ? 'ok' : s.showMissing ? 'err' : '';
     const summary = ([s.design && dLabel(s.design), s.size && `ไซซ์ ${s.size}`].filter(Boolean).join(' · ') || 'ยังไม่ได้เลือกเสื้อ')
@@ -595,18 +531,12 @@ ${this.renderHero(total, isOpen)}
     ${!step('step-name').ok && stepMark('step-name')}
     <span class="field-label" style="margin-top:0">ชื่อ – สกุล <span class="req">*</span></span>
     ${this.renderNamePicker(myVoted)}
-    ${needsUnlock && !allowChange ? html`<div class="notice info">ท่านโหวตแล้ว ระบบไม่เปิดให้แก้ไข</div>` : html`
-      <label class="field-label" for="phone">เบอร์โทรศัพท์ <span class="req">*</span> <span>ใช้เป็นรหัสผ่านแก้ไขข้อมูล</span></label>
-      ${needsUnlock && html`<p class="notice info" style="margin:0 0 8px">ชื่อนี้โหวตแล้ว ใส่เบอร์ที่ใช้ตอนโหวตเพื่อดูและแก้ไข</p>`}
-      <form class=${needsUnlock ? 'unlock' : ''} style=${needsUnlock ? 'margin-top:0' : ''} onSubmit=${e => { e.preventDefault(); if (needsUnlock) this.unlockVote(); }}>
-        <input id="phone" class="field" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0812345678" value=${s.phone}
-          readonly=${!!prev} aria-describedby="phone-hint"
-          onInput=${e => { const v = digits(e.target.value).slice(0, 10); e.target.value = v; this.setState({ phone: v, unlockErr: '' }); }} />
-        ${needsUnlock && html`<button class="btn btn-primary" type="submit" disabled=${!validPhone(s.phone) || s.unlocking}>${s.unlocking ? 'กำลังตรวจ…' : 'แก้ไขโหวต'}</button>`}
-      </form>
-      ${s.unlockErr && html`<p class="lock-err" style="margin-top:6px" role="alert">${s.unlockErr}</p>`}
-      <p class="hint" id="phone-hint" style="margin-top:6px">${prev ? 'ใช้เบอร์เดิมเป็นรหัสผ่าน แก้ไม่ได้' : needsUnlock ? '' : 'ตัวเลข 9–10 หลัก จำไว้ใช้แก้ไขโหวตภายหลัง'}</p>`}
-    ${prev && html`<div class="notice info">ท่านโหวตไว้แล้วเมื่อ ${fmtTime(prev.time)} แก้ด้านล่างแล้วกดบันทึกได้</div>`}
+    ${locked ? html`<div class="notice info">ชื่อนี้โหวตแล้ว หากต้องการแก้ไข โปรดติดต่อผู้ดูแล</div>` : html`
+      <label class="field-label" for="phone">เบอร์โทรศัพท์ <span class="req">*</span> <span>ไว้ติดต่อกลับ</span></label>
+      <input id="phone" class="field" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0812345678" value=${s.phone}
+        aria-describedby="phone-hint"
+        onInput=${e => { const v = digits(e.target.value).slice(0, 10); e.target.value = v; this.setState({ phone: v }); }} />
+      <p class="hint" id="phone-hint" style="margin-top:6px">ตัวเลข 9–10 หลัก</p>`}
   </section>
 
   <section class="block ${stepClass('step-design')}" id="step-design">
@@ -667,7 +597,7 @@ ${this.renderHero(total, isOpen)}
       <small class=${hintClass} aria-live="polite">${hint}</small>
     </div>
     <button class="btn btn-primary" disabled=${!canSubmit} onClick=${onSubmit}>
-      ${prev && allowChange ? 'บันทึกการแก้ไข' : 'ยืนยันโหวต'}
+      ยืนยันโหวต
     </button>
   </div>
 </div>`;
@@ -814,7 +744,8 @@ ${this.renderHero(total, isOpen)}
         ${list.map(v => html`
           <li>
             <div class="who"><b>${v.name}</b><small>${v.dept}</small></div>
-            ${s.mode === 'voted' && html`<div class="what">${dLabel(v.design)} · ${shirtText(v)}${extrasOf(v).length ? html`<small class="more" title=${extrasOf(v).map(shirtText).join(', ')}>+ เพิ่ม ${extrasOf(v).length} ตัว</small>` : ''}<small>${fmtTime(v.time)}</small></div>`}
+            ${s.mode === 'voted' && html`<div class="what">${dLabel(v.design)} · ${shirtText(v)}${extrasOf(v).length ? html`<small class="more" title=${extrasOf(v).map(shirtText).join(', ')}>+ เพิ่ม ${extrasOf(v).length} ตัว</small>` : ''}<small>${fmtTime(v.time)}</small>
+              ${s.adminKey && !s.viewRound && !sampleOn && html`<button class="text-btn" onClick=${() => this.startEdit(v)}>แก้ไข</button>`}</div>`}
           </li>`)}
       </ul>
       ${list.length === 0 && html`<p class="empty">${emptyText}</p>`}
@@ -828,7 +759,6 @@ ${this.renderHero(total, isOpen)}
   renderConfirm() {
     const s = this.state;
     const shirts = [{ size: s.size }, ...s.extras];
-    const editing = !!(s.prevVote && s.person && s.prevVote.name === s.person.name);
     const close = () => { if (!s.saving) this.setState({ confirm: false }); };
     return html`
 <div class="backdrop" onClick=${e => { if (e.target === e.currentTarget) close(); }}>
@@ -846,8 +776,66 @@ ${this.renderHero(total, isOpen)}
     <div class="sheet-actions">
       <button class="btn btn-ghost" disabled=${s.saving} onClick=${close}>แก้ไข</button>
       <button class="btn btn-primary" disabled=${s.saving} onClick=${() => this.submit()}>
-        ${s.saving ? 'กำลังบันทึก…' : editing ? 'ยืนยันการแก้ไข' : 'ยืนยันโหวต'}
+        ${s.saving ? 'กำลังบันทึก…' : 'ยืนยันโหวต'}
       </button>
+    </div>
+  </div>
+</div>`;
+  }
+
+  // Voters cannot change a vote once saved; the admin corrects it from the results list.
+  startEdit(v) {
+    this.setState({ edit: { name: v.name, dept: v.dept, design: v.design, size: v.size, extras: extrasOf(v).map(x => ({ size: x.size })), note: v.note || '' }, editErr: '' });
+  }
+  async saveEdit() {
+    const s = this.state, e = s.edit;
+    if (s.editSaving) return;
+    this.setState({ editSaving: true, editErr: '' });
+    try {
+      const r = await fetch('api/votes', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-key': s.adminKey },
+        body: JSON.stringify({ name: e.name, design: e.design, size: e.size, extras: e.extras, note: e.note.trim() })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'บันทึกไม่สำเร็จ');
+      this.setState({ editSaving: false, edit: null, adminMsg: `บันทึกการแก้ไขของ ${e.name} แล้ว` });
+      this.loadVotes(s.adminKey);
+    } catch (err) {
+      this.setState({ editSaving: false, editErr: err.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองอีกครั้ง' : err.message });
+    }
+  }
+  renderAdminEdit() {
+    const s = this.state, e = s.edit;
+    const set = patch => this.setState(st => ({ edit: { ...st.edit, ...patch } }));
+    const setExtra = (i, patch) => set({ extras: e.extras.map((x, j) => j === i ? { ...x, ...patch } : x) });
+    const close = () => { if (!s.editSaving) this.setState({ edit: null, editErr: '' }); };
+    const ready = offered(s.cfg.round, e.design) && e.size && e.extras.every(x => x.size);
+    return html`
+<div class="backdrop" onClick=${ev => { if (ev.target === ev.currentTarget) close(); }}>
+  <div class="sheet edit-sheet" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <h2 id="edit-title">แก้ไขโหวต</h2>
+    <p class="hint" style="margin:0"><b>${e.name}</b> · ${e.dept}</p>
+    <span class="field-label">แบบที่โหวต</span>
+    <div class="seg edit-designs" role="group" aria-label="แบบที่โหวต">
+      ${designsFor(s.cfg.round).map(d => html`<button aria-pressed=${e.design === d.id} onClick=${() => set({ design: d.id })}>${d.label}</button>`)}
+    </div>
+    <span class="field-label">ไซซ์ ตัวที่ 1</span>
+    ${this.renderSizePicker(e, patch => set(patch), ' ตัวที่ 1')}
+    ${e.extras.map((x, i) => html`
+      <div class="extra" key=${i}>
+        <div class="extra-head">
+          <b>ตัวที่ ${i + 2}</b><span class="paid-tag">ชำระเอง</span>
+          <button class="text-btn remove" onClick=${() => set({ extras: e.extras.filter((_, j) => j !== i) })} aria-label=${`ลบตัวที่ ${i + 2}`}>ลบ</button>
+        </div>
+        ${this.renderSizePicker(x, patch => setExtra(i, patch), ` ตัวที่ ${i + 2}`)}
+      </div>`)}
+    <button class="btn btn-ghost add-extra" disabled=${e.extras.length >= MAX_EXTRAS} onClick=${() => set({ extras: [...e.extras, { size: null }] })}>+ เพิ่มอีก 1 ตัว</button>
+    <label class="field-label" for="edit-note">หมายเหตุ</label>
+    <textarea id="edit-note" class="field" rows="2" value=${e.note} onInput=${ev => set({ note: ev.target.value })}></textarea>
+    ${s.editErr && html`<p class="lock-err" style="margin:0" role="alert">${s.editErr}</p>`}
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" disabled=${s.editSaving} onClick=${close}>ยกเลิก</button>
+      <button class="btn btn-primary" disabled=${s.editSaving || !ready} onClick=${() => this.saveEdit()}>${s.editSaving ? 'กำลังบันทึก…' : 'บันทึก'}</button>
     </div>
   </div>
 </div>`;
@@ -874,14 +862,14 @@ ${this.renderHero(total, isOpen)}
     return html`
 <div class="backdrop">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="done-title">
-    <h2 id="done-title">บันทึกโหวตแล้ว</h2>
+    <h2 id="done-title">โหวตเรียบร้อยแล้ว</h2>
     <p>ขอบคุณ ${done.name}</p>
     <dl>
       <dt>โหวต</dt><dd>${dLabel(done.design)}</dd>
       ${shirtsOf(done).map((x, j) => html`<dt>ตัวที่ ${j + 1}</dt><dd>${shirtText(x)} <span class="hint" style="font-weight:400">${j === 0 ? 'ฟรี' : 'ชำระเอง'}</span></dd>`)}
     </dl>
     ${extrasOf(done).length > 0 && html`<p class="paid-note" style="margin:0">ฟรี 1 ตัว · ชำระเอง ${extrasOf(done).length} ตัว</p>`}
-    <p class="hint">ต้องการแก้ไขภายหลัง เลือกชื่อของท่านแล้วใส่เบอร์ <b class="mono">${this.state.phone}</b></p>
+    <p class="hint">หากต้องการแก้ไข โปรดติดต่อผู้ดูแล</p>
     <button class="btn btn-primary" style="width:100%" onClick=${() => this.resetForm()}>เสร็จสิ้น</button>
   </div>
 </div>`;

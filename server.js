@@ -22,7 +22,6 @@ const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const flag = (name, def) => { const v = process.env[name]; return v == null || v === '' ? def : /^(1|true|yes)$/i.test(v); };
 const CONFIG = {
   votingOpen: flag('VOTING_OPEN', true),
-  allowChangeVote: flag('ALLOW_CHANGE_VOTE', true),
   hideResults: flag('HIDE_RESULTS', false),
   sampleData: flag('SAMPLE_DATA', false),
   adminEnabled: !!ADMIN_KEY
@@ -72,23 +71,24 @@ const archivedRounds = () => fs.readdirSync(DATA_DIR)
 
 const publicVote = ({ phone, note, ...v }) => v;
 
-// The phone number given with a vote is that person's code for changing it later.
+// The phone number given with a vote lets the admin reach the voter.
 const digits = s => String(s || '').replace(/\D/g, '');
 const validPhone = s => /^\d{9,10}$/.test(digits(s));
-// Wrong guesses are limited per name and address so nobody can try numbers until one fits.
-const MAX_TRIES = 5, TRY_WINDOW = 15 * 60 * 1000;
-const tries = new Map();
-const clientIp = req => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-function checkPhone(req, vote, phone) {
-  if (!digits(vote.phone)) return null; // voted before phone numbers were required: the first number given becomes the code
-  const key = vote.name + '|' + clientIp(req);
-  const now = Date.now();
-  const t = tries.get(key);
-  if (t && now - t.first < TRY_WINDOW && t.count >= MAX_TRIES) return { status: 429, error: 'ใส่เบอร์ผิดหลายครั้ง รอ 15 นาทีแล้วลองใหม่' };
-  if (digits(phone) === digits(vote.phone)) { tries.delete(key); return null; }
-  tries.set(key, t && now - t.first < TRY_WINDOW ? { first: t.first, count: t.count + 1 } : { first: now, count: 1 });
-  return { status: 403, error: 'เบอร์โทรไม่ตรงกับที่ใช้ตอนโหวต' };
+// Design and shirts of a vote, checked the same way when voting and when the admin corrects a vote.
+// Shirts after the first are paid by the voter; each has its own size (one cut for everyone).
+// The design is the vote, so it is chosen once and does not apply per shirt.
+function shirtsError(b) {
+  if (!designIds(settings.round).includes(b.design)) return 'กรุณาเลือกแบบเสื้อ';
+  if (!SIZES.includes(b.size)) return 'กรุณาเลือกไซซ์';
+  const extras = Array.isArray(b.extras) ? b.extras : [];
+  if (extras.length > 9) return 'สั่งได้สูงสุด 10 ตัว';
+  for (const [i, x] of extras.entries()) if (!x || !SIZES.includes(x.size)) return `เลือกไซซ์ของตัวที่ ${i + 2}`;
+  return null;
 }
+const shirtsOf = b => {
+  const extras = (Array.isArray(b.extras) ? b.extras : []).map(x => ({ size: x.size }));
+  return { design: b.design, size: b.size, extras, qty: 1 + extras.length };
+};
 const isAdmin = req => !!ADMIN_KEY && req.headers['x-admin-key'] === ADMIN_KEY;
 
 function send(res, status, body) {
@@ -141,17 +141,6 @@ async function api(req, res, url) {
   // Who has voted (names only), for the turnout count and the "โหวตแล้ว" tags.
   if (url.pathname === '/api/summary' && req.method === 'GET') return send(res, 200, { names: votes.map(v => v.name) });
 
-  // One person's own vote, shown only when they give the phone number they voted with.
-  if (url.pathname === '/api/vote/check' && req.method === 'POST') {
-    let b;
-    try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
-    const v = votes.find(x => x.name === String(b.name || ''));
-    if (!v) return send(res, 404, { error: 'ยังไม่มีโหวตของชื่อนี้' });
-    const bad = checkPhone(req, v, b.phone);
-    if (bad) return send(res, bad.status, { error: bad.error });
-    return send(res, 200, { vote: { ...publicVote(v), note: v.note } });
-  }
-
   // Results need the admin password unless the admin has opened them to everyone.
   // Phone numbers and notes only ever go to the admin.
   if (url.pathname === '/api/votes' && req.method === 'GET') {
@@ -181,33 +170,35 @@ async function api(req, res, url) {
     const known = staffByName.has(name);
     // A first name and a surname, letters only.
     if (!known && !(/^[\p{L}\p{M}][\p{L}\p{M} .()-]{3,79}$/u.test(name) && /\S\s+\S/.test(name))) return send(res, 400, { error: 'กรอกชื่อและนามสกุลให้ถูกต้อง' });
-    if (!designIds(settings.round).includes(b.design)) return send(res, 400, { error: 'กรุณาเลือกแบบเสื้อ' });
-    if (!SIZES.includes(b.size)) return send(res, 400, { error: 'กรุณาเลือกไซซ์' });
-    // Shirts after the first are paid by the voter; each has its own size (one cut for everyone).
-    // The design is the vote, so it is chosen once and does not apply per shirt.
-    const extras = Array.isArray(b.extras) ? b.extras : [];
-    if (extras.length > 9) return send(res, 400, { error: 'สั่งได้สูงสุด 10 ตัว' });
-    for (const [i, x] of extras.entries()) {
-      if (!x || !SIZES.includes(x.size)) return send(res, 400, { error: `เลือกไซซ์ของตัวที่ ${i + 2}` });
-    }
+    const bad = shirtsError(b);
+    if (bad) return send(res, 400, { error: bad });
     if (!validPhone(b.phone)) return send(res, 400, { error: 'กรอกเบอร์โทร 9–10 หลัก' });
-    const prev = votes.find(v => v.name === name);
-    if (prev && !CONFIG.allowChangeVote) return send(res, 409, { error: 'ท่านโหวตแล้ว ไม่สามารถโหวตซ้ำได้' });
-    if (prev) {
-      const bad = checkPhone(req, prev, b.phone);
-      if (bad) return send(res, bad.status, { error: bad.error });
-    }
+    // One vote per person; only the admin can change it afterwards (PUT below).
+    if (votes.some(v => v.name === name)) return send(res, 409, { error: 'ชื่อนี้โหวตแล้ว หากต้องการแก้ไข โปรดติดต่อผู้ดูแล' });
     const vote = {
-      name, dept: known ? staffByName.get(name) : OTHER_DEPT, ...(known ? {} : { other: true }), design: b.design, size: b.size,
-      extras: extras.map(x => ({ size: x.size })),
-      qty: 1 + extras.length,
+      name, dept: known ? staffByName.get(name) : OTHER_DEPT, ...(known ? {} : { other: true }), ...shirtsOf(b),
       phone: digits(b.phone),
       note: String(b.note || '').trim().slice(0, 500),
       time: Date.now()
     };
-    votes = votes.filter(v => v.name !== name).concat(vote);
+    votes = votes.concat(vote);
     await persist();
     return send(res, 200, publicVote(vote));
+  }
+
+  // The admin corrects someone's vote in the current round; name, department and phone stay as voted.
+  if (url.pathname === '/api/votes' && req.method === 'PUT') {
+    if (!isAdmin(req)) return send(res, 401, { error: 'รหัสผู้ดูแลไม่ถูกต้อง' });
+    let b;
+    try { b = await readBody(req); } catch (e) { return send(res, 400, { error: 'ข้อมูลไม่ถูกต้อง' }); }
+    const prev = votes.find(v => v.name === String(b.name || ''));
+    if (!prev) return send(res, 404, { error: 'ไม่พบโหวตของชื่อนี้' });
+    const bad = shirtsError(b);
+    if (bad) return send(res, 400, { error: bad });
+    const vote = { ...prev, ...shirtsOf(b), note: String(b.note || '').trim().slice(0, 500), edited: Date.now() };
+    votes = votes.map(v => v === prev ? vote : v);
+    await persist();
+    return send(res, 200, vote);
   }
 
   if (url.pathname === '/api/votes' && req.method === 'DELETE') {
